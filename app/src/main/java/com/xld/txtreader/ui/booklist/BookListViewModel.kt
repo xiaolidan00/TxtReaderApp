@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.File
 
 class BookListViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -101,15 +102,12 @@ class BookListViewModel(application: Application) : AndroidViewModel(application
         val context = getApplication<Application>()
         viewModelScope.launch(Dispatchers.IO) {
             for (uri in uris) {
-                val path = uri.toString()
+                val path = resolveRealPath(context, uri) ?: continue
                 val existing = repo.get(path)
                 if (existing != null) continue
-                val name = runCatching {
-                    context.contentResolver.query(uri, null, null, null, null)?.use { c ->
-                        c.getColumnIndexOrThrow(android.provider.OpenableColumns.DISPLAY_NAME).let { c.getString(it) }
-                    }
-                }.getOrNull() ?: "book_${System.currentTimeMillis()}.txt"
-                val bytes = runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull() ?: continue
+                val file = File(path)
+                val name = file.name
+                val bytes = runCatching { file.readBytes() }.getOrNull() ?: continue
                 val charset = com.xld.txtreader.core.EncodingReader.detectCharset(bytes)
                 val text = com.xld.txtreader.core.EncodingReader.decode(bytes, charset)
                 val preset = com.xld.txtreader.core.RegexPresets.default()
@@ -122,11 +120,42 @@ class BookListViewModel(application: Application) : AndroidViewModel(application
                     encodeStr = charset,
                     regexStr = preset.value,
                     regexType = com.xld.txtreader.core.RegexPresets.list.indexOf(preset),
-                    fileSize = bytes.size.toLong(),
+                    fileSize = file.length(),
                 )
                 repo.addBook(content)
             }
         }
+    }
+
+    private fun resolveRealPath(context: android.content.Context, uri: Uri): String? {
+        if (uri.scheme == "file") {
+            val f = File(uri.path ?: return null)
+            return if (f.exists()) f.absolutePath else null
+        }
+        if (uri.scheme == "content") {
+            context.contentResolver.query(uri, null, null, null, null)?.use { c ->
+                val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (idx >= 0 && c.moveToFirst()) {
+                    val displayName = c.getString(idx) ?: return null
+                    val downloads = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                    val candidate = File(downloads, displayName)
+                    if (candidate.exists()) return candidate.absolutePath
+                }
+            }
+            context.contentResolver.query(uri, arrayOf("_data"), null, null, null)?.use { c ->
+                if (c.moveToFirst()) {
+                    val dataIdx = c.getColumnIndex("_data")
+                    if (dataIdx >= 0) {
+                        val dataPath = c.getString(dataIdx)
+                        if (dataPath != null) {
+                            val f = File(dataPath)
+                            if (f.exists()) return f.absolutePath
+                        }
+                    }
+                }
+            }
+        }
+        return null
     }
 
     private fun applyFilterSort(

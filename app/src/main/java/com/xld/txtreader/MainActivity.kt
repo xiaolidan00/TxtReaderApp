@@ -74,13 +74,14 @@ class MainActivity : ComponentActivity() {
                 val path = data.path ?: return
                 val file = File(path)
                 if (!file.exists()) return
+                val absolutePath = file.absolutePath
                 lifecycleScope.launch {
                     val charset = runCatching { com.xld.txtreader.core.EncodingReader.detectCharset(file) }.getOrDefault("UTF-8")
                     val text = com.xld.txtreader.core.EncodingReader.readText(file, charset)
                     val preset = com.xld.txtreader.core.RegexPresets.default()
                     val chapters = com.xld.txtreader.core.ChapterParser.parse(text, preset.value)
                     val content = com.xld.txtreader.core.BookContent(
-                        filePath = file.absolutePath,
+                        filePath = absolutePath,
                         fileName = file.name,
                         text = text,
                         chapters = chapters,
@@ -95,18 +96,27 @@ class MainActivity : ComponentActivity() {
                 }
             }
             "content" -> lifecycleScope.launch {
-                val bytes = contentResolver.openInputStream(data)?.use { it.readBytes() } ?: return@launch
+                val realPath = resolveRealPathFromContent(data)
+                val file = realPath?.let { File(it) }
+                val name = file?.name
+                    ?: runCatching {
+                        contentResolver.query(data, null, null, null, null)?.use { c ->
+                            c.getColumnIndexOrThrow(android.provider.OpenableColumns.DISPLAY_NAME).let { c.getString(it) }
+                        }
+                    }.getOrNull()
+                    ?: data.lastPathSegment?.substringAfterLast('/')
+                    ?: "unknown.txt"
+                val bytes = if (file != null && file.exists()) {
+                    runCatching { file.readBytes() }.getOrNull()
+                } else {
+                    contentResolver.openInputStream(data)?.use { it.readBytes() }
+                } ?: return@launch
                 val charset = com.xld.txtreader.core.EncodingReader.detectCharset(bytes)
                 val text = com.xld.txtreader.core.EncodingReader.decode(bytes, charset)
                 val preset = com.xld.txtreader.core.RegexPresets.default()
                 val chapters = com.xld.txtreader.core.ChapterParser.parse(text, preset.value)
-                val name = runCatching {
-                    contentResolver.query(data, null, null, null, null)?.use { c ->
-                        c.getColumnIndexOrThrow(android.provider.OpenableColumns.DISPLAY_NAME).let { c.getString(it) }
-                    }
-                }.getOrNull() ?: data.lastPathSegment?.substringAfterLast('/') ?: "unknown.txt"
                 val content = com.xld.txtreader.core.BookContent(
-                    filePath = data.toString(),
+                    filePath = realPath ?: data.toString(),
                     fileName = name,
                     text = text,
                     chapters = chapters,
@@ -120,6 +130,31 @@ class MainActivity : ComponentActivity() {
                 pendingBookPath.value = pendingBookPath.value + 1
             }
         }
+    }
+
+    private fun resolveRealPathFromContent(uri: Uri): String? {
+        contentResolver.query(uri, null, null, null, null)?.use { c ->
+            val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (idx >= 0 && c.moveToFirst()) {
+                val displayName = c.getString(idx) ?: return null
+                val downloads = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                val candidate = File(downloads, displayName)
+                if (candidate.exists()) return candidate.absolutePath
+            }
+        }
+        contentResolver.query(uri, arrayOf("_data"), null, null, null)?.use { c ->
+            if (c.moveToFirst()) {
+                val dataIdx = c.getColumnIndex("_data")
+                if (dataIdx >= 0) {
+                    val dataPath = c.getString(dataIdx)
+                    if (dataPath != null) {
+                        val f = File(dataPath)
+                        if (f.exists()) return f.absolutePath
+                    }
+                }
+            }
+        }
+        return null
     }
 
     @Composable
