@@ -140,7 +140,21 @@ fun ReaderScreen(onBack: () -> Unit) {
                     }
                     state.loadError -> {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("加载失败，请确认文件存在且有访问权限")
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
+                                Text(
+                                    state.loadErrorMessage.ifBlank { "加载失败" },
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                                if (state.loadErrorMessage.contains("编码")) {
+                                    Text(
+                                        "请返回后在设置中切换编码方式",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(top = 8.dp),
+                                    )
+                                }
+                            }
                         }
                     }
                     state.totalPages == 0 -> {
@@ -162,7 +176,14 @@ fun ReaderScreen(onBack: () -> Unit) {
             Box(Modifier.fillMaxWidth().height(56.dp)) {
                 ReaderTabBar(
                     onChapter = { activeSheet = SheetKind.CHAPTERS },
-                    onTts = { activeSheet = SheetKind.TTS },
+                    onTts = {
+                        if (activeSheet == SheetKind.TTS) {
+                            activeSheet = null
+                        } else {
+                            if (!state.tts.isPlaying) vm.ttsPlayCurrent()
+                            activeSheet = SheetKind.TTS
+                        }
+                    },
                     onSearch = { activeSheet = SheetKind.SEARCH },
                     onSettings = { activeSheet = SheetKind.SETTINGS },
                     modifier = Modifier.fillMaxSize(),

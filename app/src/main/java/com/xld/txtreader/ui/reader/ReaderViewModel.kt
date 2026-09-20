@@ -31,6 +31,7 @@ import java.io.File
 data class ReaderUiState(
     val loading: Boolean = true,
     val loadError: Boolean = false,
+    val loadErrorMessage: String = "",
     val filePath: String = "",
     val fileName: String = "",
     val chapters: List<String> = emptyList(),
@@ -86,15 +87,32 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     fun load() {
         val path = OpenBookStore.filePath
         if (path.isNullOrBlank()) {
-            _state.update { it.copy(loading = false, loadError = true) }
+            _state.update { it.copy(loading = false, loadError = true, loadErrorMessage = "未指定文件路径") }
             return
         }
         viewModelScope.launch(context = Dispatchers.IO) {
             try {
+                val file = java.io.File(path)
+                if (!file.exists()) {
+                    _state.update { it.copy(loading = false, loadError = true, loadErrorMessage = "文件不存在：$path") }
+                    return@launch
+                }
+                if (!file.canRead()) {
+                    _state.update { it.copy(loading = false, loadError = true, loadErrorMessage = "无法读取文件，请检查访问权限") }
+                    return@launch
+                }
                 val record = repo.get(path)
                 val encode = record?.encodeStr ?: "UTF-8"
-                val file = java.io.File(path)
                 val text = EncodingReader.readText(file, encode)
+                if (text.isBlank()) {
+                    _state.update { it.copy(loading = false, loadError = true, loadErrorMessage = "文件内容为空") }
+                    return@launch
+                }
+                val garbledRatio = text.count { it == '\uFFFD' || (it.code < 0x20 && it != '\n' && it != '\r' && it != '\t') }.toFloat() / text.length
+                if (garbledRatio > 0.01) {
+                    _state.update { it.copy(loading = false, loadError = true, loadErrorMessage = "编码不匹配，文件内容显示为乱码\n当前编码：$encode\n请在设置中选择正确的编码方式") }
+                    return@launch
+                }
                 val fileName = record?.fileName ?: file.name
                 val regexType = record?.regexType ?: 0
                 val regexStr = record?.regexStr ?: RegexPresets.list[regexType].value
@@ -110,6 +128,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                     it.copy(
                         loading = false,
                         loadError = false,
+                        loadErrorMessage = "",
                         filePath = path,
                         fileName = fileName,
                         chapters = chapters.map { ch -> ch.title.takeIf { t -> t.isNotBlank() } ?: "" },
@@ -125,8 +144,13 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 paginateAll()
                 applyRestore(restoreChapter, restorePage)
-            } catch (_: Exception) {
-                _state.update { it.copy(loading = false, loadError = true) }
+            } catch (e: Exception) {
+                val msg = when {
+                    e is java.io.FileNotFoundException -> "文件不存在：$path"
+                    e is java.io.IOException -> "读取文件失败：${e.message}"
+                    else -> "加载失败：${e.message ?: e.javaClass.simpleName}"
+                }
+                _state.update { it.copy(loading = false, loadError = true, loadErrorMessage = msg) }
             }
         }
     }
