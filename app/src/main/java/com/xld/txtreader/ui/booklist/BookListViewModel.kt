@@ -25,6 +25,7 @@ class BookListViewModel(application: Application) : AndroidViewModel(application
         val keyword: String = "",
         val sortKey: SortKey = SortKey.TIME,
         val ascending: Boolean = false,
+        val selectedPaths: Set<String> = emptySet(),
     )
 
     private val repo get() = getApplication<Application>().appRepositories
@@ -64,6 +65,35 @@ class BookListViewModel(application: Application) : AndroidViewModel(application
 
     fun deleteFile(path: String) {
         viewModelScope.launch(Dispatchers.IO) { repo.deleteFilesAndRecords(listOf(path)) }
+    }
+
+    fun toggleSelect(path: String) {
+        _state.update {
+            val next = if (path in it.selectedPaths) it.selectedPaths - path else it.selectedPaths + path
+            it.copy(selectedPaths = next)
+        }
+    }
+
+    fun selectAll() {
+        _state.update { it.copy(selectedPaths = it.books.mapTo(HashSet()) { b -> b.filePath }) }
+    }
+
+    fun clearSelection() {
+        _state.update { it.copy(selectedPaths = emptySet()) }
+    }
+
+    fun deleteSelectedRecords() {
+        val paths = _state.value.selectedPaths.toList()
+        if (paths.isEmpty()) return
+        _state.update { it.copy(selectedPaths = emptySet()) }
+        viewModelScope.launch(Dispatchers.IO) { repo.deleteRecords(paths) }
+    }
+
+    fun deleteSelectedFiles() {
+        val paths = _state.value.selectedPaths.toList()
+        if (paths.isEmpty()) return
+        _state.update { it.copy(selectedPaths = emptySet()) }
+        viewModelScope.launch(Dispatchers.IO) { repo.deleteFilesAndRecords(paths) }
     }
 
     fun importUris(uris: List<Uri>) {

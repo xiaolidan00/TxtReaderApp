@@ -51,6 +51,7 @@ data class ReaderUiState(
     val searchKeyword: String = "",
     val searchResults: List<BookSearcher.Hit> = emptyList(),
     val searching: Boolean = false,
+    val highlightKeyword: String = "",
     val tts: TtsUiState = TtsUiState(),
 )
 
@@ -183,7 +184,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         jumpTo(chapter, local)
     }
 
-    fun jumpTo(chapter: Int, pageInChapter: Int) {
+    fun jumpTo(chapter: Int, pageInChapter: Int, highlightKeyword: String = "") {
         val c = content ?: return
         if (chapter !in c.chapters.indices) return
         val clamped = pageInChapter.coerceIn(0, (pageList.getOrNull(chapter)?.size ?: 1) - 1)
@@ -197,6 +198,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 currentPage = clamped,
                 scrollEpoch = it.scrollEpoch + 1,
                 pendingScroll = g,
+                highlightKeyword = highlightKeyword,
             )
         }
         persist()
@@ -311,7 +313,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun search(keyword: String) {
-        _state.update { it.copy(searchKeyword = keyword, searching = true) }
+        _state.update { it.copy(searchKeyword = keyword, searching = true, highlightKeyword = "") }
         if (keyword.isBlank()) {
             _state.update { it.copy(searchResults = emptyList(), searching = false) }
             return

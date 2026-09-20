@@ -200,7 +200,7 @@ fun ReaderScreen(onBack: () -> Unit) {
                 SheetKind.SEARCH -> SearchSheet(
                     state = state,
                     onSearch = vm::search,
-                    onJump = { chapter, page -> vm.jumpTo(chapter, page); activeSheet = null },
+                    onJump = { chapter, page -> vm.jumpTo(chapter, page, state.searchKeyword); activeSheet = null },
                 )
                 SheetKind.SETTINGS -> SettingsSheet(
                     state = state,
@@ -321,8 +321,10 @@ private fun ReaderPagerHost(
         key = { it },
     ) { page ->
         val text = vm.pageTextAt(page)
+        val kw = state.highlightKeyword
+        val displayText = if (kw.isNotBlank()) highlightKeyword(text, kw) else AnnotatedString(text)
         Text(
-            text = text,
+            text = displayText,
             modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 12.dp),
             style = androidx.compose.ui.text.TextStyle(
                 fontSize = state.fontSp.sp,

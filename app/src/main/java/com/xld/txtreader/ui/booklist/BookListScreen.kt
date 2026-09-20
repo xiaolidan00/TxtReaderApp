@@ -3,7 +3,9 @@ package com.xld.txtreader.ui.booklist
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +25,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -69,7 +72,10 @@ fun BookListScreen(onOpenBook: (String) -> Unit) {
 
     var sortMenu by remember { mutableStateOf(false) }
     var confirmDeletePath by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+    var confirmBatchDelete by remember { mutableStateOf<Boolean?>(null) }
     var detailBook by remember { mutableStateOf<BookRecord?>(null) }
+
+    val inSelectionMode = state.selectedPaths.isNotEmpty()
 
     val filePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments(),
@@ -79,32 +85,54 @@ fun BookListScreen(onOpenBook: (String) -> Unit) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("书架") },
-                actions = {
-                    IconButton(onClick = { filePicker.launch(arrayOf("text/plain", "text/*", "application/octet-stream")) }) {
-                        Icon(Icons.Default.Add, contentDescription = "添加txt")
-                    }
-                    IconButton(onClick = { sortMenu = true }) {
-                        Icon(painterResource(R.drawable.ic_sort), contentDescription = "排序")
-                    }
-                    DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
-                        BookListViewModel.SortKey.entries.forEach { key ->
-                            listOf(true to "升序", false to "降序").forEach { (asc, label) ->
-                                val selected = state.sortKey == key && state.ascending == asc
-                                DropdownMenuItem(
-                                    text = { Text("${key.label} · $label") },
-                                    trailingIcon = {
-                                        if (selected) Icon(Icons.Default.Check, contentDescription = null)
-                                        else null
-                                    },
-                                    onClick = { vm.setSort(key, asc); sortMenu = false },
-                                )
+            if (inSelectionMode) {
+                TopAppBar(
+                    title = { Text("已选 ${state.selectedPaths.size} 项") },
+                    navigationIcon = {
+                        IconButton(onClick = { vm.clearSelection() }) {
+                            Icon(Icons.Default.Close, contentDescription = "取消选择")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { vm.selectAll() }) {
+                            Icon(Icons.Default.Check, contentDescription = "全选")
+                        }
+                        IconButton(onClick = { confirmBatchDelete = false }) {
+                            Icon(painterResource(R.drawable.ic_delete_record), contentDescription = "删除记录")
+                        }
+                        IconButton(onClick = { confirmBatchDelete = true }) {
+                            Icon(painterResource(R.drawable.ic_delete_file), contentDescription = "删除文件")
+                        }
+                    },
+                )
+            } else {
+                TopAppBar(
+                    title = { Text("书架") },
+                    actions = {
+                        IconButton(onClick = { filePicker.launch(arrayOf("text/plain", "text/*", "application/octet-stream")) }) {
+                            Icon(Icons.Default.Add, contentDescription = "添加txt")
+                        }
+                        IconButton(onClick = { sortMenu = true }) {
+                            Icon(painterResource(R.drawable.ic_sort), contentDescription = "排序")
+                        }
+                        DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                            BookListViewModel.SortKey.entries.forEach { key ->
+                                listOf(true to "升序", false to "降序").forEach { (asc, label) ->
+                                    val selected = state.sortKey == key && state.ascending == asc
+                                    DropdownMenuItem(
+                                        text = { Text("${key.label} · $label") },
+                                        trailingIcon = {
+                                            if (selected) Icon(Icons.Default.Check, contentDescription = null)
+                                            else null
+                                        },
+                                        onClick = { vm.setSort(key, asc); sortMenu = false },
+                                    )
+                                }
                             }
                         }
-                    }
-                },
-            )
+                    },
+                )
+            }
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { filePicker.launch(arrayOf("text/plain", "text/*", "application/octet-stream")) }) {
@@ -149,9 +177,18 @@ fun BookListScreen(onOpenBook: (String) -> Unit) {
             } else {
                 LazyColumn(Modifier.fillMaxSize()) {
                     items(state.books, key = { it.filePath }) { book ->
+                        val selected = book.filePath in state.selectedPaths
                         BookCard(
                             book = book,
-                            onClick = { onOpenBook(book.filePath) },
+                            selected = selected,
+                            inSelectionMode = inSelectionMode,
+                            onClick = {
+                                if (inSelectionMode) vm.toggleSelect(book.filePath)
+                                else onOpenBook(book.filePath)
+                            },
+                            onLongClick = {
+                                if (!inSelectionMode) vm.toggleSelect(book.filePath)
+                            },
                             onDetail = { detailBook = book },
                             onDeleteRecord = { confirmDeletePath = book.filePath to false },
                             onDeleteFile = { confirmDeletePath = book.filePath to true },
@@ -191,12 +228,42 @@ fun BookListScreen(onOpenBook: (String) -> Unit) {
             },
         )
     }
+
+    confirmBatchDelete?.let { deleteFile ->
+        val count = state.selectedPaths.size
+        AlertDialog(
+            onDismissRequest = { confirmBatchDelete = null },
+            title = { Text(if (deleteFile) "批量删除文件？" else "批量删除记录？") },
+            text = {
+                Text(
+                    if (deleteFile) {
+                        "将删除 $count 个文件及其阅读记录，不可恢复。确定继续吗？"
+                    } else {
+                        "将从书架移除 $count 条记录，仅删除阅读记录，不影响原 txt 文件。确定继续吗？"
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmBatchDelete = null
+                    if (deleteFile) vm.deleteSelectedFiles() else vm.deleteSelectedRecords()
+                }) { Text("删除") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmBatchDelete = null }) { Text("取消") }
+            },
+        )
+    }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun BookCard(
     book: BookRecord,
+    selected: Boolean,
+    inSelectionMode: Boolean,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
     onDetail: () -> Unit,
     onDeleteRecord: () -> Unit,
     onDeleteFile: () -> Unit,
@@ -207,15 +274,26 @@ private fun BookCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp)
-            .clickable(onClick = onClick),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+            ),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+            else MaterialTheme.colorScheme.surfaceVariant,
         ),
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
+            Modifier.fillMaxWidth().padding(start = if (inSelectionMode) 4.dp else 12.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (inSelectionMode) {
+                Checkbox(
+                    checked = selected,
+                    onCheckedChange = { onClick() },
+                    modifier = Modifier.padding(start = 4.dp),
+                )
+            }
             Box(Modifier.weight(1f)) {
                 Column {
                     Text(
@@ -232,29 +310,31 @@ private fun BookCard(
                     )
                 }
             }
-            Box {
-                IconButton(onClick = { menuExpanded = true }) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "更多")
-                }
-                DropdownMenu(
-                    expanded = menuExpanded,
-                    onDismissRequest = { menuExpanded = false },
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("查看详情") },
-                        onClick = { menuExpanded = false; onDetail() },
-                    )
-                    HorizontalDivider()
+            if (!inSelectionMode) {
+                Box {
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "更多")
+                    }
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("查看详情") },
+                            onClick = { menuExpanded = false; onDetail() },
+                        )
+                        HorizontalDivider()
                     DropdownMenuItem(
                         text = { Text("删除记录") },
-                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                        leadingIcon = { Icon(painterResource(R.drawable.ic_delete_record), contentDescription = null, tint = MaterialTheme.colorScheme.error) },
                         onClick = { menuExpanded = false; onDeleteRecord() },
                     )
                     DropdownMenuItem(
                         text = { Text("删除文件") },
-                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                        leadingIcon = { Icon(painterResource(R.drawable.ic_delete_file), contentDescription = null, tint = MaterialTheme.colorScheme.error) },
                         onClick = { menuExpanded = false; onDeleteFile() },
                     )
+                    }
                 }
             }
         }
