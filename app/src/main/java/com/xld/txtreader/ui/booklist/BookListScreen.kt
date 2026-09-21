@@ -127,7 +127,7 @@ fun BookListScreen(onOpenBook: (String) -> Unit) {
                 )
             }
         },
-         
+
         containerColor = MaterialTheme.colorScheme.surface,
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
