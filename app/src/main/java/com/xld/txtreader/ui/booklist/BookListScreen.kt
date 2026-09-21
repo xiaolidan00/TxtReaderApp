@@ -15,13 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -90,12 +83,12 @@ fun BookListScreen(onOpenBook: (String) -> Unit) {
                     title = { Text("已选 ${state.selectedPaths.size} 项") },
                     navigationIcon = {
                         IconButton(onClick = { vm.clearSelection() }) {
-                            Icon(Icons.Default.Close, contentDescription = "取消选择")
+                            Icon(painterResource(R.drawable.ic_close), contentDescription = "取消选择")
                         }
                     },
                     actions = {
                         IconButton(onClick = { vm.selectAll() }) {
-                            Icon(Icons.Default.Check, contentDescription = "全选")
+                            Icon(painterResource(R.drawable.ic_check), contentDescription = "全选")
                         }
                         IconButton(onClick = { confirmBatchDelete = false }) {
                             Icon(painterResource(R.drawable.ic_delete_record), contentDescription = "删除记录")
@@ -110,7 +103,7 @@ fun BookListScreen(onOpenBook: (String) -> Unit) {
                     title = { Text("书架") },
                     actions = {
                         IconButton(onClick = { filePicker.launch(arrayOf("text/plain", "text/*", "application/octet-stream")) }) {
-                            Icon(Icons.Default.Add, contentDescription = "添加txt")
+                            Icon(painterResource(R.drawable.ic_add), contentDescription = "添加txt")
                         }
                         IconButton(onClick = { sortMenu = true }) {
                             Icon(painterResource(R.drawable.ic_sort), contentDescription = "排序")
@@ -122,7 +115,7 @@ fun BookListScreen(onOpenBook: (String) -> Unit) {
                                     DropdownMenuItem(
                                         text = { Text("${key.label} · $label") },
                                         trailingIcon = {
-                                            if (selected) Icon(Icons.Default.Check, contentDescription = null)
+                                            if (selected) Icon(painterResource(R.drawable.ic_check), contentDescription = null)
                                             else null
                                         },
                                         onClick = { vm.setSort(key, asc); sortMenu = false },
@@ -134,11 +127,7 @@ fun BookListScreen(onOpenBook: (String) -> Unit) {
                 )
             }
         },
-        floatingActionButton = {
-            FloatingActionButton(onClick = { filePicker.launch(arrayOf("text/plain", "text/*", "application/octet-stream")) }) {
-                Icon(Icons.Default.Add, contentDescription = "添加txt")
-            }
-        },
+         
         containerColor = MaterialTheme.colorScheme.surface,
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
@@ -147,11 +136,11 @@ fun BookListScreen(onOpenBook: (String) -> Unit) {
                 onValueChange = vm::setKeyword,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 placeholder = { Text("搜索书名") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                leadingIcon = { Icon(painterResource(R.drawable.ic_search), contentDescription = null) },
                 trailingIcon = {
                     if (state.keyword.isNotEmpty()) {
                         IconButton(onClick = { vm.setKeyword("") }) {
-                            Icon(Icons.Default.Close, contentDescription = "清除")
+                            Icon(painterResource(R.drawable.ic_close), contentDescription = "清除")
                         }
                     }
                 },
@@ -313,7 +302,7 @@ private fun BookCard(
             if (!inSelectionMode) {
                 Box {
                     IconButton(onClick = { menuExpanded = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "更多")
+                        Icon(painterResource(R.drawable.ic_more_vert), contentDescription = "更多")
                     }
                     DropdownMenu(
                         expanded = menuExpanded,

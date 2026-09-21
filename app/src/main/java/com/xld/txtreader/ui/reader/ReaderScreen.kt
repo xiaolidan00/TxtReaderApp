@@ -20,13 +20,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
@@ -52,7 +45,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -244,7 +236,7 @@ private fun ReaderTopBar(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onBack) {
-            Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+            Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "返回")
         }
         Column(Modifier.weight(1f)) {
             Text(fileName, style = MaterialTheme.typography.titleMedium, maxLines = 1)
@@ -272,8 +264,8 @@ private fun ReaderTabBar(
     ) {
         ReaderTab(onChapter, "章节", drawableIcon = R.drawable.ic_chapters)
         ReaderTab(onTts, "朗读", drawableIcon = R.drawable.ic_speaker)
-        ReaderTab(onSearch, "搜索", vectorIcon = Icons.Default.Search)
-        ReaderTab(onSettings, "设置", vectorIcon = Icons.Default.Settings)
+        ReaderTab(onSearch, "搜索", drawableIcon = R.drawable.ic_search)
+        ReaderTab(onSettings, "设置", drawableIcon = R.drawable.ic_settings)
     }
 }
 
@@ -281,7 +273,6 @@ private fun ReaderTabBar(
 private fun ReaderTab(
     onClick: () -> Unit,
     label: String,
-    vectorIcon: ImageVector? = null,
     drawableIcon: Int? = null,
 ) {
     Column(
@@ -291,13 +282,10 @@ private fun ReaderTab(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         IconButton(onClick = onClick, modifier = Modifier.size(32.dp)) {
-            if (vectorIcon != null) {
-                Icon(vectorIcon, contentDescription = label, modifier = Modifier.size(24.dp))
-            } else if (drawableIcon != null) {
+            if (drawableIcon != null) {
                 Icon(painterResource(drawableIcon), contentDescription = label, modifier = Modifier.size(24.dp))
             }
         }
-//        Text(label, style = MaterialTheme.typography.labelSmall)
     }
 }
 
@@ -402,8 +390,8 @@ private fun TtsSheet(
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ControlButton(onClick = onPrevChapter, icon = { Icon(Icons.Default.KeyboardArrowLeft, null) }, label = "上一章")
-            ControlButton(onClick = onPrevPage, icon = { Icon(Icons.Default.KeyboardArrowLeft, null) }, label = "上一页")
+            ControlButton(onClick = onPrevChapter, icon = { Icon(painterResource(R.drawable.ic_keyboard_arrow_left), null) }, label = "上一章")
+            ControlButton(onClick = onPrevPage, icon = { Icon(painterResource(R.drawable.ic_keyboard_arrow_left), null) }, label = "上一页")
             Box(
                 Modifier
                     .size(64.dp)
@@ -414,11 +402,11 @@ private fun TtsSheet(
                 if (playing) {
                     Icon(painterResource(R.drawable.ic_pause), contentDescription = "暂停", tint = Color.White, modifier = Modifier.size(32.dp))
                 } else {
-                    Icon(Icons.Default.PlayArrow, contentDescription = "播放", tint = Color.White, modifier = Modifier.size(32.dp))
+                    Icon(painterResource(R.drawable.ic_play), contentDescription = "播放", tint = Color.White, modifier = Modifier.size(32.dp))
                 }
             }
-            ControlButton(onClick = onNextPage, icon = { Icon(Icons.Default.KeyboardArrowRight, null) }, label = "下一页")
-            ControlButton(onClick = onNextChapter, icon = { Icon(Icons.Default.KeyboardArrowRight, null) }, label = "下一章")
+            ControlButton(onClick = onNextPage, icon = { Icon(painterResource(R.drawable.ic_keyboard_arrow_right), null) }, label = "下一页")
+            ControlButton(onClick = onNextChapter, icon = { Icon(painterResource(R.drawable.ic_keyboard_arrow_right), null) }, label = "下一章")
         }
 
         Text("播放速度", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 16.dp))
@@ -463,7 +451,7 @@ private fun SearchSheet(
         onValueChange = onSearch,
         modifier = Modifier.fillMaxWidth().padding(16.dp),
         placeholder = { Text("输入关键词搜索全书") },
-        leadingIcon = { Icon(Icons.Default.Search, null) },
+        leadingIcon = { Icon(painterResource(R.drawable.ic_search), null) },
         singleLine = true,
     )
     if (state.searching) {
