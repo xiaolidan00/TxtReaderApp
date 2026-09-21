@@ -1,19 +1,12 @@
 package com.xld.txtreader.tts
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
-import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
 import android.os.IBinder
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
-import androidx.core.app.NotificationCompat
-import com.xld.txtreader.MainActivity
-import com.xld.txtreader.R
 import com.xld.txtreader.TxtReaderApplication
 import com.xld.txtreader.appSettings
 import com.xld.txtreader.eventEmitter
@@ -29,10 +22,6 @@ class TtsService : Service() {
     private var pendingText: String? = null
     private var currentText: String? = null
     var isSpeaking = false
-    var isPlaying = false
-    var bookTitle = ""
-    var chapterTitle = ""
-    var totalChapter = 0
 
     private val app: TxtReaderApplication get() = application as TxtReaderApplication
     private val appSettings get() = app.appSettings
@@ -41,7 +30,6 @@ class TtsService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        createChannel()
         val initListener = TextToSpeech.OnInitListener { status ->
             val ok = status == TextToSpeech.SUCCESS
             Log.d("TtsService", "TTS init status=$status ok=$ok")
@@ -98,9 +86,6 @@ class TtsService : Service() {
         when (intent?.action) {
             TtsController.ACTION_PLAY -> {
                 val text = intent.getStringExtra("extra_text")
-                bookTitle = intent.getStringExtra("extra_book_title") ?: bookTitle
-                chapterTitle = intent.getStringExtra("extra_chapter_title") ?: chapterTitle
-                totalChapter = intent.getIntExtra("extra_total_chapter", totalChapter)
                 if (text != null) {
                     pendingText = null
                     currentText = text
@@ -120,18 +105,10 @@ class TtsService : Service() {
                 }
             }
             TtsController.ACTION_PAUSE -> pause()
-            TtsController.ACTION_PREV_PAGE -> {
-                if (isSpeaking) { isSpeaking = false; tts.stop() }
-            }
-            TtsController.ACTION_NEXT_PAGE -> {
-                if (isSpeaking) { isSpeaking = false; tts.stop() }
-            }
-            TtsController.ACTION_PREV_CHAPTER -> {
-                if (isSpeaking) { isSpeaking = false; tts.stop() }
-            }
-            TtsController.ACTION_NEXT_CHAPTER -> {
-                if (isSpeaking) { isSpeaking = false; tts.stop() }
-            }
+            TtsController.ACTION_PREV_PAGE -> stopService()
+            TtsController.ACTION_NEXT_PAGE -> stopService()
+            TtsController.ACTION_PREV_CHAPTER -> stopService()
+            TtsController.ACTION_NEXT_CHAPTER -> stopService()
             TtsController.ACTION_SPEED -> {
                 val speed = intent.getFloatExtra("extra_speed", appSettings.ttsSpeed)
                 appSettings.ttsSpeed = speed
@@ -145,14 +122,8 @@ class TtsService : Service() {
     private fun speak(text: String?) {
         if (text.isNullOrBlank()) return
         isSpeaking = true
-        isPlaying = true
-        goForeground()
         Log.d("TtsService", "speaking textLen=${text.length}")
-        val result = tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "tts_page")
-        if (result != TextToSpeech.SUCCESS) {
-            Log.e("TtsService", "tts.speak failed: $result")
-        }
-        refreshNotification()
+        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "tts_page")
     }
 
     private fun onUtteranceDone() {
@@ -161,92 +132,19 @@ class TtsService : Service() {
     }
 
     private fun pause() {
-        isPlaying = false
         isSpeaking = false
         runCatching { tts.stop() }
-        refreshNotification()
-    }
-
-    private fun stopService() {
-        isPlaying = false
-        isSpeaking = false
-        runCatching { tts.stop() }
-        stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
-    private fun goForeground() {
-        startForeground(NOTIFICATION_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+    private fun stopService() {
+        isSpeaking = false
+        runCatching { tts.stop() }
+        stopSelf()
     }
-
-    private fun refreshNotification() {
-        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).notify(NOTIFICATION_ID, buildNotification())
-    }
-
-    private fun createChannel() {
-        val channel = NotificationChannel(CHANNEL_ID, "语音朗读", NotificationManager.IMPORTANCE_LOW)
-        channel.description = "朗读小说时的播放控制"
-        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
-    }
-
-    private fun buildNotification(): android.app.Notification {
-        val subtitle = buildString {
-            if (chapterTitle.isNotEmpty()) {
-                append(chapterTitle)
-            } else {
-                append("尚未播放")
-            }
-            if (totalChapter > 0) {
-                append(" · ").append("朗读中")
-            }
-        }
-
-        val openPi = PendingIntent.getActivity(
-            this, 0,
-            Intent(this, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-
-        val prevPi = servicePi(101, TtsController.ACTION_PREV_CHAPTER)
-        val nextPi = servicePi(102, TtsController.ACTION_NEXT_CHAPTER)
-        val toggleAction = if (isPlaying) {
-            NotificationCompat.Action(R.drawable.ic_pause, "暂停", servicePi(103, TtsController.ACTION_PAUSE))
-        } else {
-            NotificationCompat.Action(R.drawable.ic_play, "播放", servicePi(103, TtsController.ACTION_TOGGLE))
-        }
-
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_speaker)
-            .setContentTitle(bookTitle.ifBlank { "TXT阅读器" }.take(40))
-            .setContentText(subtitle)
-            .setContentIntent(openPi)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .addAction(NotificationCompat.Action(R.drawable.ic_skip_prev, "上一章", prevPi))
-            .addAction(toggleAction)
-            .addAction(NotificationCompat.Action(R.drawable.ic_skip_next, "下一章", nextPi))
-            .build()
-    }
-
-    private fun servicePi(requestCode: Int, action: String): PendingIntent =
-        PendingIntent.getService(
-            this, requestCode,
-            Intent(this, TtsService::class.java).setAction(action),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
 
     override fun onDestroy() {
         ready = false
         runCatching { tts.shutdown() }
-        stopSelf()
-    }
-
-    companion object {
-        private const val NOTIFICATION_ID = 1001
-        private const val CHANNEL_ID = "tts_playback"
     }
 }

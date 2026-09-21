@@ -3,12 +3,11 @@ package com.xld.txtreader.tts
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import androidx.core.content.ContextCompat
 
 class TtsController(private val context: Context) {
 
-    fun play(text: String, bookTitle: String = "", chapterTitle: String = "", totalChapter: Int = 0) {
-        startService(ACTION_PLAY, text = text, bookTitle = bookTitle, chapterTitle = chapterTitle, totalChapter = totalChapter)
+    fun play(text: String) {
+        startService(ACTION_PLAY, text = text)
     }
 
     fun toggle() = startService(ACTION_TOGGLE)
@@ -18,20 +17,21 @@ class TtsController(private val context: Context) {
     fun prevChapter() = startService(ACTION_PREV_CHAPTER)
     fun nextChapter() = startService(ACTION_NEXT_CHAPTER)
     fun speed(value: Float) = startService(ACTION_SPEED, speed = value)
-    fun stop() = startService(ACTION_STOP)
+    fun stop() = startNormalService(ACTION_STOP)
 
-    private fun startService(action: String, text: String? = null, speed: Float? = null, bookTitle: String = "", chapterTitle: String = "", totalChapter: Int = 0) {
+    private fun startService(action: String, text: String? = null, speed: Float? = null) {
         try {
             val intent = Intent(context, TtsService::class.java).setAction(action)
             text?.let { intent.putExtra("extra_text", it) }
             speed?.let { intent.putExtra("extra_speed", it) }
-            if (bookTitle.isNotEmpty()) intent.putExtra("extra_book_title", bookTitle)
-            if (chapterTitle.isNotEmpty()) intent.putExtra("extra_chapter_title", chapterTitle)
-            if (totalChapter > 0) intent.putExtra("extra_total_chapter", totalChapter)
-            ContextCompat.startForegroundService(context, intent)
+            context.startService(intent)
         } catch (e: Exception) {
-            Log.e("TtsController", "startForegroundService failed", e)
+            Log.e("TtsController", "startService failed", e)
         }
+    }
+
+    private fun startNormalService(action: String) {
+        startService(action)
     }
 
     companion object {

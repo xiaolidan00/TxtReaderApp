@@ -1,6 +1,9 @@
 # AGENTS.md — TxtReaderApp
 
 ## 构建与运行
+
+只在build模式时进行构建验证，plan模式不进行构建验证
+
 android-studio中有JDK 21,地址在`D:\softwares\android-studio\jbr\bin`
 ```bash
 # Windows

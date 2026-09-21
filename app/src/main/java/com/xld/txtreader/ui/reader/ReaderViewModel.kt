@@ -87,7 +87,9 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     init {
         viewModelScope.launch {
             eventEmitter.on(EVENT_TTS_DONE) { _ ->
-                moveToNextPage()
+                viewModelScope.launch {
+                    moveToNextPage()
+                }
             }
             eventEmitter.on(EVENT_TTS_START) { _ ->
                 val c = content ?: return@on
@@ -213,18 +215,30 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         val ch = chapterOf(global)
         val local = global - offsets[ch]
         if (ch != currentChapter || local != currentPage) {
+            val wasPlaying = _state.value.ttsPlaying
+            if (wasPlaying) {
+                controller.stop()
+                _state.update { it.copy(ttsPlaying = false) }
+            }
             currentChapter = ch
             currentPage = local
             _state.update { it.copy(currentChapter = ch, currentPage = local) }
             persist()
+            if (wasPlaying) ttsPlayCurrent()
         }
     }
 
     fun jumpChapter(chapter: Int) {
         val c = content ?: return
         if (chapter !in c.chapters.indices) return
+        val wasPlaying = _state.value.ttsPlaying
+        if (wasPlaying) {
+            controller.stop()
+            _state.update { it.copy(ttsPlaying = false) }
+        }
         val local = 0
         jumpTo(chapter, local)
+        if (wasPlaying) ttsPlayCurrent()
     }
 
     fun jumpTo(chapter: Int, pageInChapter: Int, highlightKeyword: String = "") {
@@ -232,6 +246,11 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         if (chapter !in c.chapters.indices) return
         val clamped = pageInChapter.coerceIn(0, (pageList.getOrNull(chapter)?.size ?: 1) - 1)
         if (chapter == currentChapter && clamped == currentPage) return
+        val wasPlaying = _state.value.ttsPlaying
+        if (wasPlaying) {
+            controller.stop()
+            _state.update { it.copy(ttsPlaying = false) }
+        }
         currentChapter = chapter
         currentPage = clamped
         val g = currentGlobal()
@@ -245,6 +264,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             )
         }
         persist()
+        if (wasPlaying) ttsPlayCurrent()
     }
 
     fun seekToGlobal(global: Int) {
@@ -253,6 +273,11 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         val g = global.coerceIn(0, (total - 1).coerceAtLeast(0))
         val ch = chapterOf(g)
         val local = g - offsets[ch]
+        val wasPlaying = _state.value.ttsPlaying
+        if (wasPlaying) {
+            controller.stop()
+            _state.update { it.copy(ttsPlaying = false) }
+        }
         currentChapter = ch
         currentPage = local
         _state.update {
@@ -263,6 +288,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 pendingScroll = g,
             )
         }
+        if (wasPlaying) ttsPlayCurrent()
     }
 
     fun consumeScroll() {
@@ -374,7 +400,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         if (text.isBlank()) return
         val ch = currentChapter
         val chTitle = c.chapterTitle(ch)
-        controller.play(text, c.fileName, chTitle, c.totalChapter)
+        controller.play(text)
         _state.update { it.copy(ttsPlaying = true, ttsChapter = ch, ttsPageInChapter = currentPage, ttsBookTitle = c.fileName, ttsChapterTitle = chTitle, ttsTotalChapter = c.totalChapter) }
     }
 
@@ -389,39 +415,19 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun ttsPrevPage() {
-        val cur = _state.value
-        if (cur.ttsPlaying) {
-            controller.prevPage()
-        } else {
-            moveByPage(-1)
-        }
+        moveByPage(-1)
     }
 
     fun ttsNextPage() {
-        val cur = _state.value
-        if (cur.ttsPlaying) {
-            controller.nextPage()
-        } else {
-            moveByPage(1)
-        }
+        moveByPage(1)
     }
 
     fun ttsPrevChapter() {
-        val cur = _state.value
-        if (cur.ttsPlaying) {
-            controller.prevChapter()
-        } else {
-            jumpChapter(currentChapter - 1)
-        }
+        jumpChapter(currentChapter - 1)
     }
 
     fun ttsNextChapter() {
-        val cur = _state.value
-        if (cur.ttsPlaying) {
-            controller.nextChapter()
-        } else {
-            jumpChapter(currentChapter + 1)
-        }
+        jumpChapter(currentChapter + 1)
     }
 
     fun ttsSpeed(value: Float) {
@@ -435,25 +441,33 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         _state.update { it.copy(ttsPlaying = false) }
     }
 
-    private fun moveToNextPage() {
+    private suspend fun moveToNextPage() {
         if (offsets.isEmpty()) return
         val total = offsets[offsets.size - 1]
         val g = currentGlobal()
         val ch = chapterOf(g)
         val local = g - offsets[ch]
-        if (local + 1 < (pageList.getOrNull(ch)?.size ?: 1)) {
-            jumpTo(ch, local + 1)
+        val (newCh, newPage) = if (local + 1 < (pageList.getOrNull(ch)?.size ?: 1)) {
+            ch to local + 1
         } else if (ch + 1 < content?.totalChapter ?: 0) {
-            jumpTo(ch + 1, 0)
+            ch + 1 to 0
         } else {
             stopTts()
             return
         }
-        val newText = pageTextAt(currentGlobal())
-        val c = content ?: return
-        val newCh = currentChapter
-        controller.play(newText, c.fileName, c.chapterTitle(newCh), c.totalChapter)
-        _state.update { it.copy(ttsChapter = newCh, ttsPageInChapter = currentPage, ttsPlaying = true) }
+        currentChapter = newCh
+        currentPage = newPage
+        _state.update {
+            it.copy(
+                currentChapter = newCh,
+                currentPage = newPage,
+                scrollEpoch = it.scrollEpoch + 1,
+                pendingScroll = currentGlobal(),
+            )
+        }
+        persist()
+        delay(500)
+        ttsPlayCurrent()
     }
 
     private fun moveByPage(delta: Int) {

@@ -1,9 +1,5 @@
 package com.xld.txtreader.ui.reader
 
-import android.Manifest
-import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -68,7 +65,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -95,11 +91,7 @@ fun ReaderScreen(onBack: () -> Unit) {
 
     var activeSheet by remember { mutableStateOf<SheetKind?>(null) }
 
-    val notifPermLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { }
-
-    val densities = LocalDensity.current
+        val densities = LocalDensity.current
     val padXPx = with(densities) { 20.dp.toPx() }
     val padYPx = with(densities) { 12.dp.toPx() }
 
@@ -111,7 +103,8 @@ fun ReaderScreen(onBack: () -> Unit) {
         Column(
             Modifier
                 .fillMaxSize()
-                .safeDrawingPadding(),
+                .safeDrawingPadding()
+                .navigationBarsPadding(),
         ) {
             // Top bar slot
             Box(Modifier.fillMaxWidth().height(56.dp)) {
@@ -173,7 +166,7 @@ fun ReaderScreen(onBack: () -> Unit) {
             }
 
             // Bottom bar slot
-            Box(Modifier.fillMaxWidth().height(56.dp)) {
+            Box(Modifier.fillMaxWidth().height(56.dp).navigationBarsPadding()) {
                 ReaderTabBar(
                     onChapter = { activeSheet = SheetKind.CHAPTERS },
                     onTts = {
@@ -208,11 +201,6 @@ fun ReaderScreen(onBack: () -> Unit) {
                     speed = state.ttsSpeed,
                     fileName = state.fileName,
                     onTogglePlay = {
-                        if (Build.VERSION.SDK_INT >= 33 &&
-                            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
-                        ) {
-                            notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        }
                         vm.ttsToggle()
                     },
                     onPrevPage = vm::ttsPrevPage,
@@ -309,7 +297,7 @@ private fun ReaderTab(
                 Icon(painterResource(drawableIcon), contentDescription = label, modifier = Modifier.size(24.dp))
             }
         }
-        Text(label, style = MaterialTheme.typography.labelSmall)
+//        Text(label, style = MaterialTheme.typography.labelSmall)
     }
 }
 
