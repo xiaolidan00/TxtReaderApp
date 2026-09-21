@@ -45,7 +45,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -103,7 +102,10 @@ fun ReaderScreen(onBack: () -> Unit) {
                 ReaderTopBar(
                     fileName = state.fileName,
                     progress = if (state.totalChapter > 0) "第${state.currentChapter + 1}/${state.totalChapter}章" else "",
-                    onBack = onBack,
+                    onBack = {
+                        vm.backPage()
+                        onBack()
+                    },
                     modifier = Modifier.fillMaxSize(),
                 )
             }

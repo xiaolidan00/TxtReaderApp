@@ -235,7 +235,13 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         val chStart = c.chapters.getOrNull(ch)?.start ?: 0
         return c.text.substring(chStart + range.first, chStart + range.last + 1)
     }
-
+fun backPage(){
+     val wasPlaying = _state.value.ttsPlaying
+            if (wasPlaying) {
+                controller.stop()
+                _state.update { it.copy(ttsPlaying = false) }
+            }
+}
     fun currentGlobal(): Int {
         if (offsets.isEmpty()) return 0
         val total = offsets[offsets.size - 1]
