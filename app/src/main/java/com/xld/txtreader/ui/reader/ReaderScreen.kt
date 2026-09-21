@@ -180,7 +180,6 @@ fun ReaderScreen(onBack: () -> Unit) {
                         if (activeSheet == SheetKind.TTS) {
                             activeSheet = null
                         } else {
-                            if (!state.tts.isPlaying) vm.ttsPlayCurrent()
                             activeSheet = SheetKind.TTS
                         }
                     },
@@ -202,7 +201,11 @@ fun ReaderScreen(onBack: () -> Unit) {
                     onJump = { chapter -> vm.jumpChapter(chapter); activeSheet = null },
                 )
                 SheetKind.TTS -> TtsSheet(
-                    tts = state.tts,
+                    playing = state.ttsPlaying,
+                    available = state.ttsAvailable,
+                    chapterTitle = state.ttsChapterTitle,
+                    progressText = state.ttsProgressText,
+                    speed = state.ttsSpeed,
                     fileName = state.fileName,
                     onTogglePlay = {
                         if (Build.VERSION.SDK_INT >= 33 &&
@@ -384,7 +387,11 @@ private fun ChapterSheet(
 
 @Composable
 private fun TtsSheet(
-    tts: com.xld.txtreader.tts.TtsUiState,
+    playing: Boolean,
+    available: Boolean,
+    chapterTitle: String,
+    progressText: String,
+    speed: Float,
     fileName: String,
     onTogglePlay: () -> Unit,
     onPrevPage: () -> Unit,
@@ -396,7 +403,7 @@ private fun TtsSheet(
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
         Text("语音朗读", style = MaterialTheme.typography.titleMedium)
         Text(
-            "${fileName.take(20)} · ${tts.chapterTitle.ifBlank { "尚未播放" }} (${tts.progressText})",
+            "${fileName.take(20)} · ${if (chapterTitle.isBlank()) "尚未播放" else chapterTitle} (${progressText})",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),
@@ -416,7 +423,7 @@ private fun TtsSheet(
                     .clickable(onClick = onTogglePlay),
                 contentAlignment = Alignment.Center,
             ) {
-                if (tts.isPlaying) {
+                if (playing) {
                     Icon(painterResource(R.drawable.ic_pause), contentDescription = "暂停", tint = Color.White, modifier = Modifier.size(32.dp))
                 } else {
                     Icon(Icons.Default.PlayArrow, contentDescription = "播放", tint = Color.White, modifier = Modifier.size(32.dp))
@@ -430,14 +437,14 @@ private fun TtsSheet(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("0.5x", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Slider(
-                value = tts.speed,
+                value = speed,
                 onValueChange = onSpeed,
                 valueRange = 0.5f..2.0f,
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
             )
             Text("2.0x", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Text("当前语速 ${String.format(java.util.Locale.CHINA, "%.2f", tts.speed)}x", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("当前语速 ${String.format(java.util.Locale.CHINA, "%.2f", speed)}x", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

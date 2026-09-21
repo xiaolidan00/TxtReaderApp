@@ -93,3 +93,18 @@ class StringEventEmitter {
 interface Subscription {
     fun cancel()
 }
+
+val eventEmitter = StringEventEmitter()
+
+const val EVENT_TTS_PLAY = "com.xld.txtreader.tts.PLAY"
+const val EVENT_TTS_PAUSE = "com.xld.txtreader.tts.PAUSE"
+const val EVENT_TTS_STOP = "com.xld.txtreader.tts.STOP"
+const val EVENT_TTS_TOGGLE = "com.xld.txtreader.tts.TOGGLE"
+const val EVENT_TTS_NEXT_PAGE = "com.xld.txtreader.tts.NEXT_PAGE"
+const val EVENT_TTS_PREV_PAGE = "com.xld.txtreader.tts.PREV_PAGE"
+const val EVENT_TTS_NEXT_CHAPTER = "com.xld.txtreader.tts.NEXT_CHAPTER"
+const val EVENT_TTS_PREV_CHAPTER = "com.xld.txtreader.tts.PREV_CHAPTER"
+const val EVENT_TTS_SPEED = "com.xld.txtreader.tts.SPEED"
+const val EVENT_TTS_DONE = "com.xld.txtreader.tts.DONE"
+const val EVENT_TTS_START = "com.xld.txtreader.tts.START"
+const val EVENT_TTS_READY = "com.xld.txtreader.tts.READY"

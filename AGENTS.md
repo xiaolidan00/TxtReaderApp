@@ -1,7 +1,7 @@
 # AGENTS.md — TxtReaderApp
 
 ## 构建与运行
-
+android-studio中有JDK 21,地址在`D:\softwares\android-studio\jbr\bin`
 ```bash
 # Windows
 .\gradlew.bat :app:assembleDebug
@@ -56,9 +56,8 @@ TxtReaderApp/
 │       │   │   ├── BookRepository.kt     # 导入/删除/进度 facade
 │       │   │   └── SettingsStore.kt      # SharedPreferences（字体、颜色、视口、TTS语速）
 │       │   ├── tts/                      # 语音朗读
-│       │   │   ├── TtsBus.kt             # StateFlow，TTS 状态总线
-│       │   │   ├── TtsController.kt      # 启动前台服务的命令封装
-│       │   │   └── TtsService.kt         # 前台服务，通知栏控制，自动翻页
+│       │   │   ├── TtsController.kt      # 通过 startService 发送指令
+│       │   │   └── TtsService.kt         # 前台服务，通知栏控制，EventEmitter 监听
 │       │   └── ui/                       # Compose UI
 │       │       ├── booklist/             # 书架页（搜索、排序、批量删除）
 │       │       ├── reader/               # 阅读页（分页、设置、TTS、搜索）
@@ -180,13 +179,14 @@ Room 编译器使用 KSP（非 kapt）。实体 `BookRecord` 使用 `@Upsert` �
 
 ### TTS 架构要点
 
-- TtsService 是纯文本朗读服务，接收 `pageText` 字符串，调用 `tts.speak()`
-- 分层：`splitSentences()` 按句号分句（用于高亮）→ `splitChunks()` 按逗号分块（≤40字，用于播放粒度）
-- `TtsBus` 通过 `StateFlow` 传递状态到 UI 层
-- `onStart` 回调设置 `speakingChunkIndex`（用于高亮追踪）
-- `onDone` 回调推进进度，最后 chunk 完成时设置 `pageFinished = true`
-- ViewModel 观察 `pageFinished`，调用 `moveByPage(1)` 自动翻页
-- 翻页后通过 `ACTION_UPDATE_PAGE` intent 通知 TtsService 加载新页内容
+- TtsService 是纯文本朗读服务，接收 `EVENT_TTS_PLAY` 事件中的整页文本，调用 `tts.speak(text, QUEUE_FLUSH)` 直接朗读
+- `TtsController` 通过 `startService(Intent)` 向 TtsService 发送播放指令（含文本和书籍信息）
+- `EventEmitter` 传递事件：ReaderViewModel → TtsService（PLAY/PAUSE/STOP/NEXT_PAGE/SPEED等）、TtsService → ReaderViewModel（`EVENT_TTS_DONE`/`EVENT_TTS_START`/`EVENT_TTS_READY`）
+- `EVENT_TTS_DONE` 由 TtsService 在 `onUtteranceDone()` 时发出，ReaderViewModel 收到后自动翻到下一页并朗读新文本
+- TtsService 不进行分页/内容加载，仅朗读当前页面文本
+- 通知栏使用 `CATEGORY_TRANSPORT` + `FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK` 媒体播放通知
+- TtsService 通过 `onStartCommand` 接收 PendingIntent 通知栏按钮指令，转换为 `startService` 调用
+- `TtsBus` 已完全移除，UI 层 TTS 状态直接从 `ReaderUiState` 读取
 
 ### 代码规范
 

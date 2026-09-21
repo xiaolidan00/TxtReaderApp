@@ -7,28 +7,27 @@ import androidx.core.content.ContextCompat
 
 class TtsController(private val context: Context) {
 
-    fun play(path: String, chapter: Int, pageInChapter: Int) {
-        val intent = base(ACTION_PLAY)
-            .putExtra(EXTRA_PATH, path)
-            .putExtra(EXTRA_CHAPTER, chapter)
-            .putExtra(EXTRA_PAGE, pageInChapter)
-        start(intent)
+    fun play(text: String, bookTitle: String = "", chapterTitle: String = "", totalChapter: Int = 0) {
+        startService(ACTION_PLAY, text = text, bookTitle = bookTitle, chapterTitle = chapterTitle, totalChapter = totalChapter)
     }
 
-    fun toggle() = start(base(ACTION_TOGGLE))
-    fun pause() = start(base(ACTION_PAUSE))
-    fun prevPage() = start(base(ACTION_PREV_PAGE))
-    fun nextPage() = start(base(ACTION_NEXT_PAGE))
-    fun prevChapter() = start(base(ACTION_PREV_CHAPTER))
-    fun nextChapter() = start(base(ACTION_NEXT_CHAPTER))
-    fun speed(value: Float) = start(base(ACTION_SPEED).putExtra(EXTRA_SPEED, value))
-    fun stop() = start(base(ACTION_STOP))
+    fun toggle() = startService(ACTION_TOGGLE)
+    fun pause() = startService(ACTION_PAUSE)
+    fun prevPage() = startService(ACTION_PREV_PAGE)
+    fun nextPage() = startService(ACTION_NEXT_PAGE)
+    fun prevChapter() = startService(ACTION_PREV_CHAPTER)
+    fun nextChapter() = startService(ACTION_NEXT_CHAPTER)
+    fun speed(value: Float) = startService(ACTION_SPEED, speed = value)
+    fun stop() = startService(ACTION_STOP)
 
-    private fun base(action: String): Intent =
-        Intent(context, TtsService::class.java).setAction(action)
-
-    private fun start(intent: Intent) {
+    private fun startService(action: String, text: String? = null, speed: Float? = null, bookTitle: String = "", chapterTitle: String = "", totalChapter: Int = 0) {
         try {
+            val intent = Intent(context, TtsService::class.java).setAction(action)
+            text?.let { intent.putExtra("extra_text", it) }
+            speed?.let { intent.putExtra("extra_speed", it) }
+            if (bookTitle.isNotEmpty()) intent.putExtra("extra_book_title", bookTitle)
+            if (chapterTitle.isNotEmpty()) intent.putExtra("extra_chapter_title", chapterTitle)
+            if (totalChapter > 0) intent.putExtra("extra_total_chapter", totalChapter)
             ContextCompat.startForegroundService(context, intent)
         } catch (e: Exception) {
             Log.e("TtsController", "startForegroundService failed", e)
@@ -45,9 +44,5 @@ class TtsController(private val context: Context) {
         const val ACTION_NEXT_CHAPTER = "com.xld.txtreader.tts.NEXT_CHAPTER"
         const val ACTION_SPEED = "com.xld.txtreader.tts.SPEED"
         const val ACTION_STOP = "com.xld.txtreader.tts.STOP"
-        const val EXTRA_PATH = "path"
-        const val EXTRA_CHAPTER = "chapter"
-        const val EXTRA_PAGE = "page"
-        const val EXTRA_SPEED = "speed"
     }
 }

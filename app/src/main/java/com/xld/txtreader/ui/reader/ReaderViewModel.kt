@@ -13,10 +13,12 @@ import com.xld.txtreader.core.ChapterParser
 import com.xld.txtreader.core.EncodingReader
 import com.xld.txtreader.core.Paginator
 import com.xld.txtreader.core.RegexPresets
-import com.xld.txtreader.tts.TtsBus
 import com.xld.txtreader.tts.TtsController
-import com.xld.txtreader.tts.TtsUiState
 import com.xld.txtreader.OpenBookStore
+import com.xld.txtreader.eventEmitter
+import com.xld.txtreader.EVENT_TTS_DONE
+import com.xld.txtreader.EVENT_TTS_START
+import com.xld.txtreader.EVENT_TTS_READY
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -53,8 +55,18 @@ data class ReaderUiState(
     val searchResults: List<BookSearcher.Hit> = emptyList(),
     val searching: Boolean = false,
     val highlightKeyword: String = "",
-    val tts: TtsUiState = TtsUiState(),
-)
+    val ttsPlaying: Boolean = false,
+    val ttsAvailable: Boolean = false,
+    val ttsChapter: Int = 0,
+    val ttsPageInChapter: Int = 0,
+    val ttsTotalChapter: Int = 0,
+    val ttsBookTitle: String = "",
+    val ttsChapterTitle: String = "",
+    val ttsSpeed: Float = 1f,
+) {
+    val ttsProgressText: String
+        get() = if (ttsTotalChapter > 0 && ttsChapter < ttsTotalChapter) "${ttsChapter + 1}/${ttsTotalChapter}" else "0/0"
+}
 
 class ReaderViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -74,11 +86,18 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         viewModelScope.launch {
-            TtsBus.state.collect { tts ->
-                _state.update { it.copy(tts = tts) }
-                if (tts.isPlaying) {
-                    followTts(tts.chapter, tts.pageInChapter)
-                }
+            eventEmitter.on(EVENT_TTS_DONE) { _ ->
+                moveToNextPage()
+            }
+            eventEmitter.on(EVENT_TTS_START) { _ ->
+                val c = content ?: return@on
+                val g = currentGlobal()
+                val ch = chapterOf(g)
+                val local = g - (offsets.getOrNull(ch) ?: 0)
+                _state.update { it.copy(ttsChapter = ch, ttsPageInChapter = local) }
+            }
+            eventEmitter.on(EVENT_TTS_READY) { _ ->
+                _state.update { it.copy(ttsAvailable = true) }
             }
         }
         load()
@@ -351,41 +370,90 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
 
     fun ttsPlayCurrent() {
         val c = content ?: return
-        controller.play(c.filePath, currentChapter, currentPage)
+        val text = pageTextAt(currentGlobal())
+        if (text.isBlank()) return
+        val ch = currentChapter
+        val chTitle = c.chapterTitle(ch)
+        controller.play(text, c.fileName, chTitle, c.totalChapter)
+        _state.update { it.copy(ttsPlaying = true, ttsChapter = ch, ttsPageInChapter = currentPage, ttsBookTitle = c.fileName, ttsChapterTitle = chTitle, ttsTotalChapter = c.totalChapter) }
     }
 
     fun ttsToggle() {
-        val playing = _state.value.tts.isPlaying
-        if (playing) controller.pause() else ttsPlayCurrent()
+        val cur = _state.value
+        if (cur.ttsPlaying) {
+            controller.pause()
+            _state.update { it.copy(ttsPlaying = false) }
+        } else {
+            ttsPlayCurrent()
+        }
     }
 
     fun ttsPrevPage() {
-        if (_state.value.tts.isPlaying) controller.prevPage() else moveByPage(-1)
+        val cur = _state.value
+        if (cur.ttsPlaying) {
+            controller.prevPage()
+        } else {
+            moveByPage(-1)
+        }
     }
 
     fun ttsNextPage() {
-        if (_state.value.tts.isPlaying) controller.nextPage() else moveByPage(1)
+        val cur = _state.value
+        if (cur.ttsPlaying) {
+            controller.nextPage()
+        } else {
+            moveByPage(1)
+        }
     }
 
     fun ttsPrevChapter() {
-        if (_state.value.tts.isPlaying) controller.prevChapter() else jumpChapter(currentChapter - 1)
+        val cur = _state.value
+        if (cur.ttsPlaying) {
+            controller.prevChapter()
+        } else {
+            jumpChapter(currentChapter - 1)
+        }
     }
 
     fun ttsNextChapter() {
-        if (_state.value.tts.isPlaying) controller.nextChapter() else jumpChapter(currentChapter + 1)
+        val cur = _state.value
+        if (cur.ttsPlaying) {
+            controller.nextChapter()
+        } else {
+            jumpChapter(currentChapter + 1)
+        }
     }
 
     fun ttsSpeed(value: Float) {
         settings.ttsSpeed = value
         controller.speed(value)
+        _state.update { it.copy(ttsSpeed = value) }
     }
 
     fun stopTts() {
         controller.stop()
+        _state.update { it.copy(ttsPlaying = false) }
     }
 
-    private fun followTts(chapter: Int, pageInChapter: Int) {
-        jumpTo(chapter, pageInChapter)
+    private fun moveToNextPage() {
+        if (offsets.isEmpty()) return
+        val total = offsets[offsets.size - 1]
+        val g = currentGlobal()
+        val ch = chapterOf(g)
+        val local = g - offsets[ch]
+        if (local + 1 < (pageList.getOrNull(ch)?.size ?: 1)) {
+            jumpTo(ch, local + 1)
+        } else if (ch + 1 < content?.totalChapter ?: 0) {
+            jumpTo(ch + 1, 0)
+        } else {
+            stopTts()
+            return
+        }
+        val newText = pageTextAt(currentGlobal())
+        val c = content ?: return
+        val newCh = currentChapter
+        controller.play(newText, c.fileName, c.chapterTitle(newCh), c.totalChapter)
+        _state.update { it.copy(ttsChapter = newCh, ttsPageInChapter = currentPage, ttsPlaying = true) }
     }
 
     private fun moveByPage(delta: Int) {
