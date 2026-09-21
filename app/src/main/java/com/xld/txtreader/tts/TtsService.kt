@@ -105,10 +105,10 @@ class TtsService : Service() {
                 }
             }
             TtsController.ACTION_PAUSE -> pause()
-            TtsController.ACTION_PREV_PAGE -> stopService()
-            TtsController.ACTION_NEXT_PAGE -> stopService()
-            TtsController.ACTION_PREV_CHAPTER -> stopService()
-            TtsController.ACTION_NEXT_CHAPTER -> stopService()
+            TtsController.ACTION_PREV_PAGE -> { /* 不再停止，保留 currentText 供自动续读 */ }
+            TtsController.ACTION_NEXT_PAGE -> { /* 不再停止，保留 currentText 供自动续读 */ }
+            TtsController.ACTION_PREV_CHAPTER -> { /* 不再停止，保留 currentText 供自动续读 */ }
+            TtsController.ACTION_NEXT_CHAPTER -> { /* 不再停止，保留 currentText 供自动续读 */ }
             TtsController.ACTION_SPEED -> {
                 val speed = intent.getFloatExtra("extra_speed", appSettings.ttsSpeed)
                 appSettings.ttsSpeed = speed

@@ -82,6 +82,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     private var offsets: IntArray = IntArray(0)
     private var currentChapter = 0
     private var currentPage = 0
+    private var lastContentHash: String? = null
+    private var lastPageListEpoch: Int = 0
     private var persistJob: Job? = null
 
     init {
@@ -100,6 +102,38 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             }
             eventEmitter.on(EVENT_TTS_READY) { _ ->
                 _state.update { it.copy(ttsAvailable = true) }
+            }
+            // 监听 content 变化，自动更新 TTS 文本
+            viewModelScope.launch {
+                while (true) {
+                    val newHash = content?.text?.hashCode().toString()
+                    if (newHash != lastContentHash) {
+                        lastContentHash = newHash
+                        if (_state.value.ttsPlaying) {
+                            val ch = currentChapter
+                            val text = pageTextAt(currentGlobal())
+                            controller.play(text)
+                            _state.update { it.copy(ttsChapter = ch, ttsPageInChapter = currentPage) }
+                        }
+                    }
+                    delay(500)
+                }
+            }
+            // 监听 pageList 变化，自动更新 TTS 文本
+            viewModelScope.launch {
+                while (true) {
+                    val newEpoch = _state.value.pagesEpoch
+                    if (newEpoch != lastPageListEpoch) {
+                        lastPageListEpoch = newEpoch
+                        if (_state.value.ttsPlaying) {
+                            val ch = currentChapter
+                            val text = pageTextAt(currentGlobal())
+                            controller.play(text)
+                            _state.update { it.copy(ttsChapter = ch, ttsPageInChapter = currentPage) }
+                        }
+                    }
+                    delay(500)
+                }
             }
         }
         load()
@@ -233,8 +267,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         if (chapter !in c.chapters.indices) return
         val wasPlaying = _state.value.ttsPlaying
         if (wasPlaying) {
-            controller.stop()
-            _state.update { it.copy(ttsPlaying = false) }
+            // 不再停止 TTS，保留 currentText 供自动续读
+            _state.update { it.copy(ttsChapter = chapter) }
         }
         val local = 0
         jumpTo(chapter, local)
@@ -248,8 +282,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         if (chapter == currentChapter && clamped == currentPage) return
         val wasPlaying = _state.value.ttsPlaying
         if (wasPlaying) {
-            controller.stop()
-            _state.update { it.copy(ttsPlaying = false) }
+            // 不再停止 TTS，保留 currentText 供自动续读
+            _state.update { it.copy(ttsChapter = chapter) }
         }
         currentChapter = chapter
         currentPage = clamped
@@ -275,8 +309,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         val local = g - offsets[ch]
         val wasPlaying = _state.value.ttsPlaying
         if (wasPlaying) {
-            controller.stop()
-            _state.update { it.copy(ttsPlaying = false) }
+            // 不再停止 TTS，保留 currentText 供自动续读
+            _state.update { it.copy(ttsChapter = ch) }
         }
         currentChapter = ch
         currentPage = local
