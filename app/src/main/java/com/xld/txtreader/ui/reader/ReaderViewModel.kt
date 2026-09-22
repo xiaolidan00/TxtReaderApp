@@ -90,6 +90,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     private var lastContentHash: String? = null
     private var lastPageListEpoch: Int = 0
     private var persistJob: Job? = null
+    private var ttsSentenceIndex = 0
 
     init {
         viewModelScope.launch {
@@ -330,6 +331,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         val ch = chapterOf(global)
         val local = global - offsets[ch]
         if (ch != currentChapter || local != currentPage) {
+            ttsSentenceIndex = 0
             val wasPlaying = _state.value.ttsPlaying
             if (wasPlaying) {
                 controller.stop()
@@ -346,9 +348,9 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     fun jumpChapter(chapter: Int) {
         val c = content ?: return
         if (chapter !in c.chapters.indices) return
+        ttsSentenceIndex = 0
         val wasPlaying = _state.value.ttsPlaying
         if (wasPlaying) {
-            // 不再停止 TTS，保留 currentText 供自动续读
             _state.update { it.copy(ttsChapter = chapter) }
         }
         val local = 0
@@ -366,9 +368,9 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             }
             return
         }
+        ttsSentenceIndex = 0
         val wasPlaying = _state.value.ttsPlaying
         if (wasPlaying) {
-            // 不再停止 TTS，保留 currentText 供自动续读
             _state.update { it.copy(ttsChapter = chapter) }
         }
         currentChapter = chapter
@@ -410,9 +412,9 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         val g = global.coerceIn(0, (total - 1).coerceAtLeast(0))
         val ch = chapterOf(g)
         val local = g - offsets[ch]
+        ttsSentenceIndex = 0
         val wasPlaying = _state.value.ttsPlaying
         if (wasPlaying) {
-            // 不再停止 TTS，保留 currentText 供自动续读
             _state.update { it.copy(ttsChapter = ch) }
         }
         currentChapter = ch
@@ -556,13 +558,14 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun ttsPlayCurrent() {
+    fun ttsPlayCurrent(startIndex: Int = 0) {
         val c = content ?: return
         val text = pageTextAt(currentGlobal())
         if (text.isBlank()) return
         val ch = currentChapter
         val chTitle = c.chapterTitle(ch)
-        controller.play(text)
+        ttsSentenceIndex = startIndex
+        controller.play(text, startIndex)
         _state.update {
             it.copy(
                 ttsPlaying = true,
@@ -578,10 +581,11 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     fun ttsToggle() {
         val cur = _state.value
         if (cur.ttsPlaying) {
+            ttsSentenceIndex = cur.ttsHighlightIndex.coerceAtLeast(0)
             controller.pause()
             _state.update { it.copy(ttsPlaying = false) }
         } else {
-            ttsPlayCurrent()
+            ttsPlayCurrent(ttsSentenceIndex)
         }
     }
 

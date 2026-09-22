@@ -6,8 +6,8 @@ import android.util.Log
 
 class TtsController(private val context: Context) {
 
-    fun play(text: String) {
-        startService(ACTION_PLAY, text = text)
+    fun play(text: String, startIndex: Int = 0) {
+        startService(ACTION_PLAY, text = text, sentenceIndex = startIndex)
     }
 
     fun toggle() = startService(ACTION_TOGGLE)
@@ -19,11 +19,12 @@ class TtsController(private val context: Context) {
     fun speed(value: Float) = startService(ACTION_SPEED, speed = value)
     fun stop() = startNormalService(ACTION_STOP)
 
-    private fun startService(action: String, text: String? = null, speed: Float? = null) {
+    private fun startService(action: String, text: String? = null, speed: Float? = null, sentenceIndex: Int = 0) {
         try {
             val intent = Intent(context, TtsService::class.java).setAction(action)
             text?.let { intent.putExtra("extra_text", it) }
             speed?.let { intent.putExtra("extra_speed", it) }
+            if (sentenceIndex > 0) intent.putExtra("extra_sentence_index", sentenceIndex)
             context.startService(intent)
         } catch (e: Exception) {
             Log.e("TtsController", "startService failed", e)

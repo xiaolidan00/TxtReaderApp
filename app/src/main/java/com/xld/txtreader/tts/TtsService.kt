@@ -40,6 +40,7 @@ class TtsService : Service() {
     private lateinit var audioManager: AudioManager
     private var ready = false
     private var pendingText: String? = null
+    private var pendingSentenceIndex: Int = 0
     private var currentText: String? = null
     var isSpeaking = false
     private var pendingStop = false
@@ -135,7 +136,7 @@ class TtsService : Service() {
             if (ok && pendingText != null) {
                 val text = pendingText
                 pendingText = null
-                speakPage(text)
+                speakPage(text, pendingSentenceIndex)
             }
         }
         tts = TextToSpeech(this, initListener)
@@ -146,11 +147,13 @@ class TtsService : Service() {
         when (intent?.action) {
             TtsController.ACTION_PLAY -> {
                 val text = intent.getStringExtra("extra_text")
+                val startIndex = intent.getIntExtra("extra_sentence_index", 0)
                 if (text != null) {
                     pendingStop = false
                     currentText = text
+                    pendingSentenceIndex = startIndex
                     if (ready) {
-                        speakPage(text)
+                        speakPage(text, startIndex)
                     } else {
                         pendingText = text
                     }
@@ -161,7 +164,7 @@ class TtsService : Service() {
                     pause()
                 } else {
                     val text = currentText
-                    if (text != null) speakPage(text)
+                    if (text != null) speakPage(text, sentenceIndex)
                 }
             }
             TtsController.ACTION_PAUSE -> pause()
@@ -179,11 +182,11 @@ class TtsService : Service() {
         return START_STICKY
     }
 
-    private fun speakPage(text: String?) {
+    private fun speakPage(text: String?, startIndex: Int = 0) {
         if (text.isNullOrBlank()) return
         pendingStop = false
         sentenceList = SentenceSegmenter.split(text)
-        sentenceIndex = 0
+        sentenceIndex = startIndex
         if (sentenceList.isEmpty()) {
             eventEmitter.emit(EVENT_TTS_DONE)
             return
