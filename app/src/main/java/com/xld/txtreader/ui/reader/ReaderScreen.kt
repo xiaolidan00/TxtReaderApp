@@ -64,6 +64,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import com.xld.txtreader.R
+import com.xld.txtreader.core.BookSearcher
 import com.xld.txtreader.core.RegexPresets
 
 private enum class SheetKind { CHAPTERS, TTS, SEARCH, SETTINGS }
@@ -206,7 +207,7 @@ fun ReaderScreen(onBack: () -> Unit) {
                 SheetKind.SEARCH -> SearchSheet(
                     state = state,
                     onSearch = vm::search,
-                    onJump = { chapter, page -> vm.jumpTo(chapter, page, state.searchKeyword); activeSheet = null },
+                    onJump = { hit -> vm.jumpToHit(hit, state.searchKeyword); activeSheet = null },
                 )
                 SheetKind.SETTINGS -> SettingsSheet(
                     state = state,
@@ -445,7 +446,7 @@ private fun ControlButton(
 private fun SearchSheet(
     state: ReaderUiState,
     onSearch: (String) -> Unit,
-    onJump: (Int, Int) -> Unit,
+    onJump: (BookSearcher.Hit) -> Unit,
 ) {
     Text("搜索内容", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 16.dp))
     OutlinedTextField(
@@ -469,7 +470,7 @@ private fun SearchSheet(
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .clickable { onJump(hit.chapter, hit.pageInChapter) }
+                        .clickable { onJump(hit) }
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                 ) {
                     Column {

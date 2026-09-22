@@ -24,7 +24,7 @@ class BookContent(
 }
 
 class BookSearcher {
-    data class Hit(val chapter: Int, val pageInChapter: Int, val snippet: String)
+    data class Hit(val chapter: Int, val pageInChapter: Int, val offset: Int, val snippet: String)
 
     fun search(content: BookContent, pages: List<List<IntRange>>, keyword: String): List<Hit> {
         val kw = keyword.trim()
@@ -41,7 +41,7 @@ class BookSearcher {
                 if (idx < 0) break
                 val page = chapterPages.indexOfFirst { idx in it }
                 if (page >= 0) {
-                    hits += Hit(ci, page, buildSnippet(chText, idx, kw.length))
+                    hits += Hit(ci, page, content.chapters[ci].start + idx, buildSnippet(chText, idx, kw.length))
                     perChapter++
                 }
                 from = idx + kw.length

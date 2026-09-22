@@ -113,7 +113,12 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                             val ch = currentChapter
                             val text = pageTextAt(currentGlobal())
                             controller.play(text)
-                            _state.update { it.copy(ttsChapter = ch, ttsPageInChapter = currentPage) }
+                            _state.update {
+                                it.copy(
+                                    ttsChapter = ch,
+                                    ttsPageInChapter = currentPage
+                                )
+                            }
                         }
                     }
                     delay(500)
@@ -129,7 +134,12 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                             val ch = currentChapter
                             val text = pageTextAt(currentGlobal())
                             controller.play(text)
-                            _state.update { it.copy(ttsChapter = ch, ttsPageInChapter = currentPage) }
+                            _state.update {
+                                it.copy(
+                                    ttsChapter = ch,
+                                    ttsPageInChapter = currentPage
+                                )
+                            }
                         }
                     }
                     delay(500)
@@ -142,37 +152,78 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     fun load() {
         val path = OpenBookStore.filePath
         if (path.isNullOrBlank()) {
-            _state.update { it.copy(loading = false, loadError = true, loadErrorMessage = "未指定文件路径") }
+            _state.update {
+                it.copy(
+                    loading = false,
+                    loadError = true,
+                    loadErrorMessage = "未指定文件路径"
+                )
+            }
             return
         }
         viewModelScope.launch(context = Dispatchers.IO) {
             try {
                 val file = java.io.File(path)
                 if (!file.exists()) {
-                    _state.update { it.copy(loading = false, loadError = true, loadErrorMessage = "文件不存在：$path") }
+                    _state.update {
+                        it.copy(
+                            loading = false,
+                            loadError = true,
+                            loadErrorMessage = "文件不存在：$path"
+                        )
+                    }
                     return@launch
                 }
                 if (!file.canRead()) {
-                    _state.update { it.copy(loading = false, loadError = true, loadErrorMessage = "无法读取文件，请检查访问权限") }
+                    _state.update {
+                        it.copy(
+                            loading = false,
+                            loadError = true,
+                            loadErrorMessage = "无法读取文件，请检查访问权限"
+                        )
+                    }
                     return@launch
                 }
                 val record = repo.get(path)
                 val encode = record?.encodeStr ?: "UTF-8"
                 val text = EncodingReader.readText(file, encode)
                 if (text.isBlank()) {
-                    _state.update { it.copy(loading = false, loadError = true, loadErrorMessage = "文件内容为空") }
+                    _state.update {
+                        it.copy(
+                            loading = false,
+                            loadError = true,
+                            loadErrorMessage = "文件内容为空"
+                        )
+                    }
                     return@launch
                 }
-                val garbledRatio = text.count { it == '\uFFFD' || (it.code < 0x20 && it != '\n' && it != '\r' && it != '\t') }.toFloat() / text.length
+                val garbledRatio =
+                    text.count { it == '\uFFFD' || (it.code < 0x20 && it != '\n' && it != '\r' && it != '\t') }
+                        .toFloat() / text.length
                 if (garbledRatio > 0.01) {
-                    _state.update { it.copy(loading = false, loadError = true, loadErrorMessage = "编码不匹配，文件内容显示为乱码\n当前编码：$encode\n请在设置中选择正确的编码方式") }
+                    _state.update {
+                        it.copy(
+                            loading = false,
+                            loadError = true,
+                            loadErrorMessage = "编码不匹配，文件内容显示为乱码\n当前编码：$encode\n请在设置中选择正确的编码方式"
+                        )
+                    }
                     return@launch
                 }
                 val fileName = record?.fileName ?: file.name
                 val regexType = record?.regexType ?: 0
                 val regexStr = record?.regexStr ?: RegexPresets.list[regexType].value
                 val chapters = ChapterParser.parse(text, regexStr)
-                val book = BookContent(path, fileName, text, chapters, encode, regexStr, regexType, record?.fileSize ?: 0L)
+                val book = BookContent(
+                    path,
+                    fileName,
+                    text,
+                    chapters,
+                    encode,
+                    regexStr,
+                    regexType,
+                    record?.fileSize ?: 0L
+                )
                 content = book
                 BookContentHolder = book
 
@@ -186,7 +237,9 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                         loadErrorMessage = "",
                         filePath = path,
                         fileName = fileName,
-                        chapters = chapters.map { ch -> ch.title.takeIf { t -> t.isNotBlank() } ?: "" },
+                        chapters = chapters.map { ch ->
+                            ch.title.takeIf { t -> t.isNotBlank() } ?: ""
+                        },
                         totalChapter = chapters.size,
                         fontSp = settings.fontSizeSp,
                         lineSpacing = settings.lineSpacingMult,
@@ -219,8 +272,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         settings.contentHeightPx = heightPx
         settings.density = density
         if (content != null) {
-            paginateAll()
-            clampAndRefresh()
+            repaginatePreservingPosition()
         }
     }
 
@@ -235,13 +287,15 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         val chStart = c.chapters.getOrNull(ch)?.start ?: 0
         return c.text.substring(chStart + range.first, chStart + range.last + 1)
     }
-fun backPage(){
-     val wasPlaying = _state.value.ttsPlaying
-            if (wasPlaying) {
-                controller.stop()
-                _state.update { it.copy(ttsPlaying = false) }
-            }
-}
+
+    fun backPage() {
+        val wasPlaying = _state.value.ttsPlaying
+        if (wasPlaying) {
+            controller.stop()
+            _state.update { it.copy(ttsPlaying = false) }
+        }
+    }
+
     fun currentGlobal(): Int {
         if (offsets.isEmpty()) return 0
         val total = offsets[offsets.size - 1]
@@ -285,7 +339,12 @@ fun backPage(){
         val c = content ?: return
         if (chapter !in c.chapters.indices) return
         val clamped = pageInChapter.coerceIn(0, (pageList.getOrNull(chapter)?.size ?: 1) - 1)
-        if (chapter == currentChapter && clamped == currentPage) return
+        if (chapter == currentChapter && clamped == currentPage) {
+            if (highlightKeyword.isNotBlank()) {
+                _state.update { it.copy(highlightKeyword = highlightKeyword) }
+            }
+            return
+        }
         val wasPlaying = _state.value.ttsPlaying
         if (wasPlaying) {
             // 不再停止 TTS，保留 currentText 供自动续读
@@ -305,6 +364,23 @@ fun backPage(){
         }
         persist()
         if (wasPlaying) ttsPlayCurrent()
+    }
+
+    fun jumpToHit(hit: BookSearcher.Hit, highlightKeyword: String) {
+        val c = content ?: return
+        val offset = hit.offset
+        if (offset !in 0 until c.text.length) return
+        var ch = 0
+        for (i in c.chapters.indices) if (c.chapters[i].start <= offset) ch = i
+        val pages = pageList.getOrNull(ch).orEmpty()
+        if (pages.isEmpty()) {
+            jumpTo(ch, 0, highlightKeyword)
+            return
+        }
+        val local = offset - c.chapters[ch].start
+        var page = pages.indexOfFirst { local in it }
+        if (page < 0) page = pages.indexOfLast { it.first <= local }.coerceAtLeast(0)
+        jumpTo(ch, page, highlightKeyword)
     }
 
     fun seekToGlobal(global: Int) {
@@ -371,7 +447,15 @@ fun backPage(){
         }
         viewModelScope.launch(Dispatchers.IO) {
             val chapters = ChapterParser.parse(c.text, preset.value)
-            val updated = BookContent(c.filePath, c.fileName, c.text, chapters, c.encodeStr, preset.value, type)
+            val updated = BookContent(
+                c.filePath,
+                c.fileName,
+                c.text,
+                chapters,
+                c.encodeStr,
+                preset.value,
+                type
+            )
             content = updated
             BookContentHolder = updated
             repo.updateRegex(c.filePath, type, preset.value)
@@ -388,7 +472,15 @@ fun backPage(){
         }
         viewModelScope.launch(Dispatchers.IO) {
             val chapters = ChapterParser.parse(c.text, pattern)
-            val updated = BookContent(c.filePath, c.fileName, c.text, chapters, c.encodeStr, pattern, RegexPresets.CUSTOM_INDEX)
+            val updated = BookContent(
+                c.filePath,
+                c.fileName,
+                c.text,
+                chapters,
+                c.encodeStr,
+                pattern,
+                RegexPresets.CUSTOM_INDEX
+            )
             content = updated
             BookContentHolder = updated
             repo.updateRegex(c.filePath, RegexPresets.CUSTOM_INDEX, pattern)
@@ -411,7 +503,16 @@ fun backPage(){
                     EncodingReader.readText(java.io.File(c.filePath), encode)
                 }
                 val chapters = ChapterParser.parse(text, c.regexStr)
-                val updated = BookContent(c.filePath, c.fileName, text, chapters, encode, c.regexStr, c.regexType, c.fileSize)
+                val updated = BookContent(
+                    c.filePath,
+                    c.fileName,
+                    text,
+                    chapters,
+                    encode,
+                    c.regexStr,
+                    c.regexType,
+                    c.fileSize
+                )
                 content = updated
                 BookContentHolder = updated
                 repo.updateEncode(c.filePath, encode)
@@ -441,7 +542,16 @@ fun backPage(){
         val ch = currentChapter
         val chTitle = c.chapterTitle(ch)
         controller.play(text)
-        _state.update { it.copy(ttsPlaying = true, ttsChapter = ch, ttsPageInChapter = currentPage, ttsBookTitle = c.fileName, ttsChapterTitle = chTitle, ttsTotalChapter = c.totalChapter) }
+        _state.update {
+            it.copy(
+                ttsPlaying = true,
+                ttsChapter = ch,
+                ttsPageInChapter = currentPage,
+                ttsBookTitle = c.fileName,
+                ttsChapterTitle = chTitle,
+                ttsTotalChapter = c.totalChapter
+            )
+        }
     }
 
     fun ttsToggle() {
@@ -555,14 +665,32 @@ fun backPage(){
     }
 
     private fun repaginateKeepPosition() {
-        paginateAll()
-        clampAndRefresh()
+        repaginatePreservingPosition()
     }
 
-    private fun clampAndRefresh() {
+    private fun repaginatePreservingPosition() {
+        val anchor = pageAnchorOffset()
+        paginateAll()
+        placeAt(anchor)
+    }
+
+    private fun pageAnchorOffset(): Int {
+        val c = content ?: return 0
+        val range = pageList.getOrNull(currentChapter)?.getOrNull(currentPage) ?: return 0
+        return c.chapters.getOrNull(currentChapter)?.start?.plus(range.first) ?: 0
+    }
+
+    private fun placeAt(offset: Int) {
         val c = content ?: return
-        currentChapter = currentChapter.coerceIn(0, (c.totalChapter - 1).coerceAtLeast(0))
-        currentPage = currentPage.coerceIn(0, (pageList.getOrNull(currentChapter)?.size ?: 1) - 1)
+        if (c.totalChapter == 0) return
+        var ch = 0
+        for (i in c.chapters.indices) if (c.chapters[i].start <= offset) ch = i
+        val pages = pageList.getOrNull(ch).orEmpty()
+        val local = (offset - c.chapters[ch].start).coerceAtLeast(0)
+        var page = pages.indexOfFirst { local in it }
+        if (page < 0) page = pages.indexOfLast { it.first <= local }.coerceAtLeast(0)
+        currentChapter = ch.coerceIn(0, c.totalChapter - 1)
+        currentPage = page.coerceIn(0, (pageList.getOrNull(ch)?.size ?: 1) - 1)
         val g = currentGlobal()
         _state.update {
             it.copy(
@@ -581,7 +709,9 @@ fun backPage(){
         val g = currentGlobal()
         _state.update {
             it.copy(
-                chapters = book.chapters.map { ch -> ch.title.takeIf { t -> t.isNotBlank() } ?: "" },
+                chapters = book.chapters.map { ch ->
+                    ch.title.takeIf { t -> t.isNotBlank() } ?: ""
+                },
                 totalChapter = book.totalChapter,
                 regexType = type,
                 regexStr = regex,
@@ -606,7 +736,13 @@ fun backPage(){
         persistJob?.cancel()
         persistJob = viewModelScope.launch {
             delay(400)
-            repo.updateProgress(c.filePath, currentChapter, currentPage, c.totalChapter, c.text.length.toLong())
+            repo.updateProgress(
+                c.filePath,
+                currentChapter,
+                currentPage,
+                c.totalChapter,
+                c.text.length.toLong()
+            )
         }
     }
 }
