@@ -1,6 +1,8 @@
 package com.xld.txtreader
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
@@ -8,6 +10,7 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,6 +36,9 @@ class MainActivity : ComponentActivity() {
 
     private var openedByViewIntent = false
 
+    private val bluetoothPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* 结果无需额外处理 */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setIntent(intent)
@@ -45,6 +51,7 @@ class MainActivity : ComponentActivity() {
         }
         handleOpenIntent(intent)
         requestStoragePermissionIfNeeded()
+        requestBluetoothPermissionIfNeeded()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -60,6 +67,15 @@ class MainActivity : ComponentActivity() {
                 data = Uri.parse("package:$packageName")
             }
             runCatching { startActivity(intent) }
+        }
+    }
+
+    private fun requestBluetoothPermissionIfNeeded() {
+        val permission = Manifest.permission.BLUETOOTH_CONNECT
+        if ((application as TxtReaderApplication).settings.bluetoothPermissionRequested) return
+        (application as TxtReaderApplication).settings.bluetoothPermissionRequested = true
+        if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) {
+            bluetoothPermissionLauncher.launch(permission)
         }
     }
 

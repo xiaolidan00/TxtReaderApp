@@ -41,4 +41,8 @@ class SettingsStore(context: Context) {
     var lastTtsPath: String
         get() = sp.getString("tts_last_path", "").orEmpty()
         set(value) { sp.edit().putString("tts_last_path", value).apply() }
+
+    var bluetoothPermissionRequested: Boolean
+        get() = sp.getBoolean("bluetooth_permission_requested", false)
+        set(value) { sp.edit().putBoolean("bluetooth_permission_requested", value).apply() }
 }

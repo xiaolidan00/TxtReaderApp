@@ -19,6 +19,7 @@ import com.xld.txtreader.eventEmitter
 import com.xld.txtreader.EVENT_TTS_DONE
 import com.xld.txtreader.EVENT_TTS_START
 import com.xld.txtreader.EVENT_TTS_READY
+import com.xld.txtreader.EVENT_TTS_STOPPED
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -102,6 +103,9 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             }
             eventEmitter.on(EVENT_TTS_READY) { _ ->
                 _state.update { it.copy(ttsAvailable = true) }
+            }
+            eventEmitter.on(EVENT_TTS_STOPPED) { _ ->
+                _state.update { it.copy(ttsPlaying = false) }
             }
             // 监听 content 变化，自动更新 TTS 文本
             viewModelScope.launch {
