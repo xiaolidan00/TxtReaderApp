@@ -3,8 +3,7 @@ package com.xld.txtreader.core
 data class Sentence(val text: String, val start: Int, val end: Int)
 
 object SentenceSegmenter {
-    private val sentenceEnders = listOf('。', '！', '？', '；', '：', '!', '?', ',', '，')
-    private const val MAX_CHUNK_SIZE = 200
+    private val sentenceEnders = listOf('。', '！', '？', '；', '：', '!', '?', ',', '，','#','"','“','”','(',')','（','）','[',']','【','】')
 
     fun split(text: String): List<Sentence> {
         if (text.isEmpty()) return emptyList()
@@ -21,13 +20,15 @@ object SentenceSegmenter {
             val c = text[i]
             if (c in sentenceEnders || c == '\n') {
                 if (i > start) {
-                    val seg = text.substring(start, i).trim()
+                    val rawSeg = text.substring(start, i)
+                    val seg = rawSeg.trim()
                     if (seg.isNotEmpty()) {
-                        sentences += Sentence(seg, start, i)
+                        val leading = rawSeg.takeWhile { it.isWhitespace() }.length
+                        sentences += Sentence(seg, start + leading, start + leading + seg.length)
                     }
                 }
                 start = i + 1
-                while (start < text.length && (text[start] == '\n')) {
+                while (start < text.length && text[start].isWhitespace()) {
                     start++
                 }
                 i = start
@@ -36,9 +37,11 @@ object SentenceSegmenter {
             }
         }
         if (start < text.length) {
-            val remaining = text.substring(start).trim()
-            if (remaining.isNotEmpty()) {
-                sentences += Sentence(remaining, start, text.length)
+            val rawSeg = text.substring(start)
+            val seg = rawSeg.trim()
+            if (seg.isNotEmpty()) {
+                val leading = rawSeg.takeWhile { it.isWhitespace() }.length
+                sentences += Sentence(seg, start + leading, start + leading + seg.length)
             }
         }
         if (sentences.isEmpty()) {
