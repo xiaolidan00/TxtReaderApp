@@ -4,19 +4,27 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 object OpenBookStore {
     @Volatile
     var filePath: String? = null
         private set
 
+    private val _fileChangeTrigger = MutableStateFlow(0)
+    val fileChangeTrigger: StateFlow<Int> = _fileChangeTrigger.asStateFlow()
+
     fun open(path: String) {
         filePath = path
+        _fileChangeTrigger.value++
     }
 
     fun openFile(file: File?): Boolean {
         if (file == null || !file.exists()) return false
         filePath = file.absolutePath
+        _fileChangeTrigger.value++
         return true
     }
 }

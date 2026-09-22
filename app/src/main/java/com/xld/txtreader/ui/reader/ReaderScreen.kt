@@ -63,6 +63,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import com.xld.txtreader.OpenBookStore
 import com.xld.txtreader.R
 import com.xld.txtreader.core.BookSearcher
 import com.xld.txtreader.core.RegexPresets
@@ -80,6 +81,11 @@ fun ReaderScreen(onBack: () -> Unit) {
     }
     val vm: ReaderViewModel = viewModel(factory = factory)
     val state by vm.state.collectAsStateWithLifecycle()
+    val fileChangeTrigger by OpenBookStore.fileChangeTrigger.collectAsStateWithLifecycle()
+
+    LaunchedEffect(fileChangeTrigger) {
+        vm.load()
+    }
 
     var activeSheet by remember { mutableStateOf<SheetKind?>(null) }
 
