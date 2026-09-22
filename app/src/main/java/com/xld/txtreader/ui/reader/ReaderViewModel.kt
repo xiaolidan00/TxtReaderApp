@@ -86,12 +86,14 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     private var lastContentHash: String? = null
     private var lastPageListEpoch: Int = 0
     private var persistJob: Job? = null
+    private var lastTtsPlay: Long = 0
+    private val TTS_DEBOUNCE_MS = 200L
 
     init {
         viewModelScope.launch {
             eventEmitter.on(EVENT_TTS_DONE) { _ ->
                 viewModelScope.launch {
-                    moveToNextPage()
+                    ttsNextPage()
                 }
             }
             eventEmitter.on(EVENT_TTS_START) { _ ->
@@ -540,6 +542,9 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun ttsPlayCurrent() {
+        val now = System.currentTimeMillis()
+        if (now - lastTtsPlay < TTS_DEBOUNCE_MS) return
+        lastTtsPlay = now
         val c = content ?: return
         val text = pageTextAt(currentGlobal())
         if (text.isBlank()) return
@@ -593,35 +598,6 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     fun stopTts() {
         controller.stop()
         _state.update { it.copy(ttsPlaying = false) }
-    }
-
-    private suspend fun moveToNextPage() {
-        if (offsets.isEmpty()) return
-        val total = offsets[offsets.size - 1]
-        val g = currentGlobal()
-        val ch = chapterOf(g)
-        val local = g - offsets[ch]
-        val (newCh, newPage) = if (local + 1 < (pageList.getOrNull(ch)?.size ?: 1)) {
-            ch to local + 1
-        } else if (ch + 1 < content?.totalChapter ?: 0) {
-            ch + 1 to 0
-        } else {
-            stopTts()
-            return
-        }
-        currentChapter = newCh
-        currentPage = newPage
-        _state.update {
-            it.copy(
-                currentChapter = newCh,
-                currentPage = newPage,
-                scrollEpoch = it.scrollEpoch + 1,
-                pendingScroll = currentGlobal(),
-            )
-        }
-        persist()
-        delay(500)
-        ttsPlayCurrent()
     }
 
     private fun moveByPage(delta: Int) {
