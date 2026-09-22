@@ -143,7 +143,8 @@ class TtsService : Service() {
             }
             TtsController.ACTION_STOP -> stopService()
         }
-        return START_NOT_STICKY
+        // 确保服务持续运行，避免被系统杀死
+        return START_STICKY
     }
 
     private fun speak(text: String?) {
@@ -166,9 +167,10 @@ class TtsService : Service() {
 
     private fun stopService() {
         isSpeaking = false
-        runCatching { tts.stop() }
+        runCatching { tts.stop() } 
         stopSelf()
     }
+
 
     private fun registerDeviceMonitoring() {
         runCatching { audioManager.registerAudioDeviceCallback(audioDeviceCallback, null) }
