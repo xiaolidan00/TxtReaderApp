@@ -325,9 +325,12 @@ private fun ReaderPagerHost(
     ) { page ->
         val text = vm.pageTextAt(page)
         val kw = state.highlightKeyword
-        val displayText = if (kw.isNotBlank()) highlightKeyword(text, kw) else AnnotatedString(text)
+        val highlighted = if (kw.isNotBlank()) highlightKeyword(text, kw) else AnnotatedString(text)
+        val sentenceHighlighted = if (state.ttsHighlightSentenceIndex >= 0) {
+            highlightSentence(highlighted, state.ttsHighlightSentenceIndex, state.ttsHighlightRanges)
+        } else highlighted
         Text(
-            text = displayText,
+            text = sentenceHighlighted,
             modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 12.dp),
             style = androidx.compose.ui.text.TextStyle(
                 fontSize = state.fontSp.sp,
@@ -507,6 +510,18 @@ private fun highlightKeyword(snippet: String, keyword: String): AnnotatedString 
                 append(snippet.substring(idx, idx + kw.length))
             }
             from = idx + kw.length
+        }
+    }
+}
+
+private fun highlightSentence(text: AnnotatedString, sentenceIndex: Int, ranges: List<IntRange>): AnnotatedString {
+    if (sentenceIndex < 0 || ranges.size <= sentenceIndex) return text
+    val range = ranges[sentenceIndex]
+    if (range.start < 0 || range.endInclusive >= text.length) return text
+    return buildAnnotatedString {
+        append(text)
+        withStyle(SpanStyle(background = Color(0x4464B4F0))) {
+            addStyle(SpanStyle(background = Color(0x4464B4F0)), range.start, range.endInclusive)
         }
     }
 }

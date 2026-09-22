@@ -13,10 +13,12 @@ import com.xld.txtreader.core.ChapterParser
 import com.xld.txtreader.core.EncodingReader
 import com.xld.txtreader.core.Paginator
 import com.xld.txtreader.core.RegexPresets
+import com.xld.txtreader.core.SentenceSegmenter
 import com.xld.txtreader.tts.TtsController
 import com.xld.txtreader.OpenBookStore
 import com.xld.txtreader.eventEmitter
 import com.xld.txtreader.EVENT_TTS_DONE
+import com.xld.txtreader.EVENT_TTS_SENTENCE_START
 import com.xld.txtreader.EVENT_TTS_START
 import com.xld.txtreader.EVENT_TTS_READY
 import com.xld.txtreader.EVENT_TTS_STOPPED
@@ -64,6 +66,8 @@ data class ReaderUiState(
     val ttsBookTitle: String = "",
     val ttsChapterTitle: String = "",
     val ttsSpeed: Float = 1f,
+    val ttsHighlightSentenceIndex: Int = -1,
+    val ttsHighlightRanges: List<IntRange> = emptyList(),
 ) {
     val ttsProgressText: String
         get() = if (ttsTotalChapter > 0 && ttsChapter < ttsTotalChapter) "${ttsChapter + 1}/${ttsTotalChapter}" else "0/0"
@@ -91,11 +95,6 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         viewModelScope.launch {
-            eventEmitter.on(EVENT_TTS_DONE) { _ ->
-                viewModelScope.launch {
-                    ttsNextPage()
-                }
-            }
             eventEmitter.on(EVENT_TTS_START) { _ ->
                 val c = content ?: return@on
                 val g = currentGlobal()
@@ -108,6 +107,24 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             }
             eventEmitter.on(EVENT_TTS_STOPPED) { _ ->
                 _state.update { it.copy(ttsPlaying = false) }
+            }
+            eventEmitter.on(EVENT_TTS_SENTENCE_START) { index ->
+                val idx = index as? Int ?: return@on
+                val c = content ?: return@on
+                val text = pageTextAt(currentGlobal())
+                val sentences = SentenceSegmenter.split(text)
+                val ranges = sentences.map { it.start..it.end }
+                _state.update {
+                    it.copy(ttsHighlightSentenceIndex = idx, ttsHighlightRanges = ranges)
+                }
+            }
+            eventEmitter.on(EVENT_TTS_DONE) { _ ->
+                _state.update {
+                    it.copy(ttsHighlightSentenceIndex = -1, ttsHighlightRanges = emptyList())
+                }
+                viewModelScope.launch {
+                    ttsNextPage()
+                }
             }
             // 监听 content 变化，自动更新 TTS 文本
             viewModelScope.launch {

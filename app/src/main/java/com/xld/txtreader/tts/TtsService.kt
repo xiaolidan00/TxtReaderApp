@@ -15,11 +15,13 @@ import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import com.xld.txtreader.TxtReaderApplication
 import com.xld.txtreader.appSettings
+import com.xld.txtreader.core.SentenceSegmenter
 import com.xld.txtreader.eventEmitter
 import com.xld.txtreader.EVENT_TTS_DONE
 import com.xld.txtreader.EVENT_TTS_START
 import com.xld.txtreader.EVENT_TTS_READY
 import com.xld.txtreader.EVENT_TTS_STOPPED
+import com.xld.txtreader.EVENT_TTS_SENTENCE_START
 import java.util.Locale
 
 class TtsService : Service() {
@@ -30,6 +32,9 @@ class TtsService : Service() {
     private var pendingText: String? = null
     private var currentText: String? = null
     var isSpeaking = false
+    private var pendingStop = false
+    private var sentenceList: List<com.xld.txtreader.core.Sentence> = emptyList()
+    private var sentenceIndex = 0
 
     private val noisyReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -102,7 +107,7 @@ class TtsService : Service() {
             if (ok && pendingText != null) {
                 val text = pendingText
                 pendingText = null
-                speak(text)
+                speakPage(text)
             }
         }
         tts = TextToSpeech(this, initListener)
@@ -114,10 +119,10 @@ class TtsService : Service() {
             TtsController.ACTION_PLAY -> {
                 val text = intent.getStringExtra("extra_text")
                 if (text != null) {
-                    pendingText = null
+                    pendingStop = false
                     currentText = text
                     if (ready) {
-                        speak(text)
+                        speakPage(text)
                     } else {
                         pendingText = text
                     }
@@ -128,7 +133,7 @@ class TtsService : Service() {
                     pause()
                 } else {
                     val text = currentText
-                    if (text != null) speak(text)
+                    if (text != null) speakPage(text)
                 }
             }
             TtsController.ACTION_PAUSE -> pause()
@@ -143,34 +148,67 @@ class TtsService : Service() {
             }
             TtsController.ACTION_STOP -> stopService()
         }
-        // 确保服务持续运行，避免被系统杀死
         return START_STICKY
     }
 
-    private fun speak(text: String?) {
+    private fun speakPage(text: String?) {
         if (text.isNullOrBlank()) return
+        pendingStop = false
+        sentenceList = SentenceSegmenter.split(text)
+        sentenceIndex = 0
+        if (sentenceList.isEmpty()) {
+            eventEmitter.emit(EVENT_TTS_DONE)
+            return
+        }
+        speakNextSentence()
+    }
+
+    private fun speakNextSentence() {
+        if (sentenceIndex >= sentenceList.size) {
+            onPageDone()
+            return
+        }
+        val sentence = sentenceList[sentenceIndex]
+        Log.d("TtsService", "speaking sentence $sentenceIndex: ${sentence.text.take(30)}...")
+        eventEmitter.emit(EVENT_TTS_SENTENCE_START, sentenceIndex)
+        tts.speak(sentence.text, TextToSpeech.QUEUE_FLUSH, null, "tts_sentence_${sentenceIndex}")
+        sentenceIndex++
         isSpeaking = true
-        Log.d("TtsService", "speaking textLen=${text.length}")
-        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "tts_page")
     }
 
     private fun onUtteranceDone() {
+        if (pendingStop) {
+            pendingStop = false
+            eventEmitter.emit(EVENT_TTS_DONE)
+            return
+        }
+        if (sentenceIndex < sentenceList.size) {
+            speakNextSentence()
+        } else {
+            onPageDone()
+        }
+    }
+
+    private fun onPageDone() {
         isSpeaking = false
+        sentenceList = emptyList()
+        sentenceIndex = 0
         eventEmitter.emit(EVENT_TTS_DONE)
     }
 
     private fun pause() {
         isSpeaking = false
+        pendingStop = true
         runCatching { tts.stop() }
         stopSelf()
     }
 
     private fun stopService() {
         isSpeaking = false
-        runCatching { tts.stop() } 
+        pendingStop = true
+        runCatching { tts.stop() }
         stopSelf()
     }
-
 
     private fun registerDeviceMonitoring() {
         runCatching { audioManager.registerAudioDeviceCallback(audioDeviceCallback, null) }
@@ -187,6 +225,7 @@ class TtsService : Service() {
         Log.d("TtsService", "audio device lost, stopping playback")
         if (!isSpeaking) return
         isSpeaking = false
+        pendingStop = true
         runCatching { tts.stop() }
         eventEmitter.emit(EVENT_TTS_STOPPED)
         stopSelf()
@@ -207,6 +246,7 @@ class TtsService : Service() {
 
     override fun onDestroy() {
         ready = false
+        pendingStop = true
         runCatching { unregisterReceiver(noisyReceiver) }
         runCatching { audioManager.unregisterAudioDeviceCallback(audioDeviceCallback) }
         runCatching { tts.shutdown() }
