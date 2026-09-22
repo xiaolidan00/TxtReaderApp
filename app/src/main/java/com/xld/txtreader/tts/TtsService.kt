@@ -24,6 +24,7 @@ import androidx.core.app.NotificationCompat
 import com.xld.txtreader.R
 import com.xld.txtreader.TxtReaderApplication
 import com.xld.txtreader.appSettings
+import com.xld.txtreader.core.Sentence
 import com.xld.txtreader.core.SentenceSegmenter
 import com.xld.txtreader.eventEmitter
 import com.xld.txtreader.EVENT_TTS_DONE
@@ -42,11 +43,8 @@ class TtsService : Service() {
     private var currentText: String? = null
     var isSpeaking = false
     private var pendingStop = false
-    private var sentenceList: List<com.xld.txtreader.core.Sentence> = emptyList()
+    private var sentenceList: List<Sentence> = emptyList()
     private var sentenceIndex = 0
-    private var chunkList: List<String> = emptyList()
-    private var chunkSentenceIndices: List<Int> = emptyList()
-    private var chunkIndex = 0
 
     private val noisyReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -190,66 +188,19 @@ class TtsService : Service() {
             eventEmitter.emit(EVENT_TTS_DONE)
             return
         }
-        val segments = createTTSSegments(sentenceList)
-        chunkList = segments.first
-        chunkSentenceIndices = segments.second
-        chunkIndex = 0
-        if (chunkList.isEmpty() || chunkList[0].isBlank()) {
-            eventEmitter.emit(EVENT_TTS_DONE)
-            return
-        }
         speakNextChunk()
     }
 
-    private fun createTTSSegments(sentences: List<com.xld.txtreader.core.Sentence>): Pair<List<String>, List<Int>> {
-        val chunks = mutableListOf<String>()
-        val firstIndices = mutableListOf<Int>()
-        val current = StringBuilder()
-        var firstIndex = 0
-        for ((i, sentence) in sentences.withIndex()) {
-            val text = sentence.text
-            if (text.length > 200) {
-                if (current.isNotEmpty()) {
-                    chunks.add(current.toString().trim())
-                    firstIndices.add(firstIndex)
-                }
-                var offset = 0
-                while (offset < text.length) {
-                    val end = minOf(offset + 200, text.length)
-                    chunks.add(text.substring(offset, end))
-                    firstIndices.add(i)
-                    offset = end
-                }
-                firstIndex = i + 1
-            } else if (current.length + text.length > 200) {
-                chunks.add(current.toString().trim())
-                firstIndices.add(firstIndex)
-                current.setLength(0)
-                current.append(text)
-                firstIndex = i
-            } else {
-                if (current.isEmpty()) firstIndex = i
-                current.append(text)
-            }
-        }
-        if (current.isNotEmpty()) {
-            chunks.add(current.toString().trim())
-            firstIndices.add(firstIndex)
-        }
-        return chunks.ifEmpty { listOf("") } to firstIndices.ifEmpty { listOf(0) }
-    }
-
     private fun speakNextChunk() {
-        if (chunkIndex >= chunkList.size) {
+        if (sentenceIndex >= sentenceList.size) {
             onPageDone()
             return
         }
-        val chunkText = chunkList[chunkIndex]
-        val sentenceIdx = chunkSentenceIndices.getOrNull(chunkIndex) ?: 0
-        Log.d("TtsService", "speaking chunk $chunkIndex: ${chunkText.take(30)}...")
-        eventEmitter.emit(EVENT_TTS_SENTENCE_START, sentenceIdx)
-        tts.speak(chunkText, TextToSpeech.QUEUE_FLUSH, null, "tts_chunk_${chunkIndex}")
-        chunkIndex++
+        val sentence = sentenceList[sentenceIndex]
+        Log.d("TtsService", "speaking chunk $sentenceIndex: ${sentence.text.take(30)}...")
+        eventEmitter.emit(EVENT_TTS_SENTENCE_START, sentenceIndex)
+        tts.speak(sentence.text, TextToSpeech.QUEUE_FLUSH, null, "tts_sentence_${sentenceIndex}")
+        sentenceIndex++
         isSpeaking = true
         updateNotification(true)
     }
@@ -260,7 +211,7 @@ class TtsService : Service() {
             eventEmitter.emit(EVENT_TTS_DONE)
             return
         }
-        if (chunkIndex < chunkList.size) {
+        if (sentenceIndex < sentenceList.size) {
             speakNextChunk()
         } else {
             onPageDone()
@@ -271,9 +222,6 @@ class TtsService : Service() {
         isSpeaking = false
         sentenceList = emptyList()
         sentenceIndex = 0
-        chunkList = emptyList()
-        chunkSentenceIndices = emptyList()
-        chunkIndex = 0
         eventEmitter.emit(EVENT_TTS_DONE)
         updateNotification(false)
     }

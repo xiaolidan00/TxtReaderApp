@@ -332,8 +332,8 @@ private fun ReaderPagerHost(
         val text = vm.pageTextAt(page)
         val kw = state.highlightKeyword
         val highlighted = if (kw.isNotBlank()) highlightKeyword(text, kw) else AnnotatedString(text)
-        val sentenceHighlighted = if (state.ttsHighlightSentenceIndex >= 0) {
-            highlightSentence(highlighted, state.ttsHighlightSentenceIndex, state.ttsHighlightRanges)
+        val sentenceHighlighted = if (state.ttsHighlightIndex >= 0) {
+            highlightSentence(highlighted, state.ttsHighlightIndex, state.ttsHighlightRanges)
         } else highlighted
         Text(
             text = sentenceHighlighted,
@@ -520,9 +520,9 @@ private fun highlightKeyword(snippet: String, keyword: String): AnnotatedString 
     }
 }
 
-private fun highlightSentence(text: AnnotatedString, sentenceIndex: Int, ranges: List<IntRange>): AnnotatedString {
-    if (sentenceIndex < 0 || ranges.size <= sentenceIndex) return text
-    val range = ranges[sentenceIndex]
+private fun highlightSentence(text: AnnotatedString, index: Int, ranges: List<IntRange>): AnnotatedString {
+    if (index < 0 || ranges.size <= index) return text
+    val range = ranges[index]
     if (range.start < 0 || range.endInclusive >= text.length) return text
     return buildAnnotatedString {
         append(text)

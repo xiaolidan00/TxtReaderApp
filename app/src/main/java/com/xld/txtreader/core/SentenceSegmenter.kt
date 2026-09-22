@@ -3,10 +3,17 @@ package com.xld.txtreader.core
 data class Sentence(val text: String, val start: Int, val end: Int)
 
 object SentenceSegmenter {
-    private val sentenceEnders = listOf('。', '！', '？', '；', '：')
+    private val sentenceEnders = listOf('。', '！', '？', '；', '：', '!', '?', ',', '，')
+    private const val MAX_CHUNK_SIZE = 200
 
     fun split(text: String): List<Sentence> {
         if (text.isEmpty()) return emptyList()
+        val rawSentences = splitRaw(text)
+        return rawSentences
+        // return buildChunks(rawSentences)
+    }
+
+    private fun splitRaw(text: String): List<Sentence> {
         val sentences = ArrayList<Sentence>()
         var start = 0
         var i = 0

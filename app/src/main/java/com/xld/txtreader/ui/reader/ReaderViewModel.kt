@@ -66,7 +66,7 @@ data class ReaderUiState(
     val ttsBookTitle: String = "",
     val ttsChapterTitle: String = "",
     val ttsSpeed: Float = 1f,
-    val ttsHighlightSentenceIndex: Int = -1,
+    val ttsHighlightIndex: Int = -1,
     val ttsHighlightRanges: List<IntRange> = emptyList(),
 ) {
     val ttsProgressText: String
@@ -90,8 +90,6 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     private var lastContentHash: String? = null
     private var lastPageListEpoch: Int = 0
     private var persistJob: Job? = null
-    private var lastTtsPlay: Long = 0
-    private val TTS_DEBOUNCE_MS = 200L
 
     init {
         viewModelScope.launch {
@@ -115,12 +113,12 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 val sentences = SentenceSegmenter.split(text)
                 val ranges = sentences.map { it.start..it.end }
                 _state.update {
-                    it.copy(ttsHighlightSentenceIndex = idx, ttsHighlightRanges = ranges)
+                    it.copy(ttsHighlightIndex = idx, ttsHighlightRanges = ranges)
                 }
             }
             eventEmitter.on(EVENT_TTS_DONE) { _ ->
                 _state.update {
-                    it.copy(ttsHighlightSentenceIndex = -1, ttsHighlightRanges = emptyList())
+                    it.copy(ttsHighlightIndex = -1, ttsHighlightRanges = emptyList())
                 }
                 viewModelScope.launch {
                     ttsNextPage()
@@ -559,9 +557,6 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun ttsPlayCurrent() {
-        val now = System.currentTimeMillis()
-        if (now - lastTtsPlay < TTS_DEBOUNCE_MS) return
-        lastTtsPlay = now
         val c = content ?: return
         val text = pageTextAt(currentGlobal())
         if (text.isBlank()) return
