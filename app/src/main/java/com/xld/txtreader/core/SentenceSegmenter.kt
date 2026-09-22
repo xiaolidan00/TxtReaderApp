@@ -19,18 +19,15 @@ object SentenceSegmenter {
         var i = 0
         while (i < text.length) {
             val c = text[i]
-            if (c in sentenceEnders || c == '\n' || c == '\r') {
+            if (c in sentenceEnders || c == '\n') {
                 if (i > start) {
                     val seg = text.substring(start, i).trim()
                     if (seg.isNotEmpty()) {
                         sentences += Sentence(seg, start, i)
                     }
                 }
-                if (c == '\n' || c == '\r') {
-                    sentences += Sentence(text.substring(start, i + 1).trim(), start, i + 1)
-                }
                 start = i + 1
-                while (start < text.length && (text[start] == '\n' || text[start] == '\r')) {
+                while (start < text.length && (text[start] == '\n')) {
                     start++
                 }
                 i = start
