@@ -190,9 +190,7 @@ class MainActivity : ComponentActivity() {
     private fun MainNav() {
         val navController = rememberNavController()
 
-        val startDestination = remember {
-            if (openedByViewIntent) "readerContent" else "booklist"
-        }
+        val startDestination = "booklist"
 
         val trigger by pendingBookPath.collectAsStateWithLifecycle()
         LaunchedEffect(trigger) {
