@@ -39,6 +39,13 @@ class MainActivity : ComponentActivity() {
     private val bluetoothPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* 结果无需额外处理 */ }
 
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (!granted) {
+                // 通知权限被拒绝，后续TTS播放不会有通知栏提示
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setIntent(intent)
@@ -52,6 +59,7 @@ class MainActivity : ComponentActivity() {
         handleOpenIntent(intent)
         requestStoragePermissionIfNeeded()
         requestBluetoothPermissionIfNeeded()
+        requestNotificationPermissionIfNeeded()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -77,6 +85,11 @@ class MainActivity : ComponentActivity() {
         if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) {
             bluetoothPermissionLauncher.launch(permission)
         }
+    }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
+        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
     @Suppress("DEPRECATION")
