@@ -315,8 +315,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         val ch = chapterOf(global)
         val local = global - offsets[ch]
         val range = pageList.getOrNull(ch)?.getOrNull(local) ?: return ""
-        val chStart = c.chapters.getOrNull(ch)?.start ?: 0
-        return c.text.substring(chStart + range.first, chStart + range.last + 1)
+        return c.chapterText(ch).substring(range)
     }
 
     fun backPage() {
@@ -401,16 +400,15 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
 
     fun jumpToHit(hit: BookSearcher.Hit, highlightKeyword: String) {
         val c = content ?: return
-        val offset = hit.offset
-        if (offset !in 0 until c.text.length) return
-        var ch = 0
-        for (i in c.chapters.indices) if (c.chapters[i].start <= offset) ch = i
+        val ch = hit.chapter
+        if (ch !in c.chapters.indices) return
+        val local = hit.offset
+        if (local < 0) return
         val pages = pageList.getOrNull(ch).orEmpty()
         if (pages.isEmpty()) {
             jumpTo(ch, 0, highlightKeyword)
             return
         }
-        val local = offset - c.chapters[ch].start
         var page = pages.indexOfFirst { local in it }
         if (page < 0) page = pages.indexOfLast { it.first <= local }.coerceAtLeast(0)
         jumpTo(ch, page, highlightKeyword)
@@ -685,16 +683,15 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     private fun pageAnchorOffset(): Int {
         val c = content ?: return 0
         val range = pageList.getOrNull(currentChapter)?.getOrNull(currentPage) ?: return 0
-        return c.chapters.getOrNull(currentChapter)?.start?.plus(range.first) ?: 0
+        return offsets.getOrNull(currentChapter)?.plus(range.first) ?: 0
     }
 
     private fun placeAt(offset: Int) {
         val c = content ?: return
         if (c.totalChapter == 0) return
-        var ch = 0
-        for (i in c.chapters.indices) if (c.chapters[i].start <= offset) ch = i
+        val ch = chapterOf(offset)
         val pages = pageList.getOrNull(ch).orEmpty()
-        val local = (offset - c.chapters[ch].start).coerceAtLeast(0)
+        val local = offset - offsets[ch]
         var page = pages.indexOfFirst { local in it }
         if (page < 0) page = pages.indexOfLast { it.first <= local }.coerceAtLeast(0)
         currentChapter = ch.coerceIn(0, c.totalChapter - 1)

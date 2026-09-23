@@ -19,7 +19,7 @@ class BookContent(
 
     fun chapterText(index: Int): String {
         val ch = chapters.getOrNull(index) ?: return ""
-        return text.substring(ch.start, ch.end)
+        return ch.content.ifEmpty { text.substring(ch.start, ch.end) }
     }
 }
 
@@ -41,7 +41,7 @@ class BookSearcher {
                 if (idx < 0) break
                 val page = chapterPages.indexOfFirst { idx in it }
                 if (page >= 0) {
-                    hits += Hit(ci, page, content.chapters[ci].start + idx, buildSnippet(chText, idx, kw.length))
+                    hits += Hit(ci, page, idx, buildSnippet(chText, idx, kw.length))
                     perChapter++
                 }
                 from = idx + kw.length
