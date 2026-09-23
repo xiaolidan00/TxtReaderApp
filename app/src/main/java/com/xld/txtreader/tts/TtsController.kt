@@ -3,6 +3,7 @@ package com.xld.txtreader.tts
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import androidx.core.content.ContextCompat
 
 class TtsController(private val context: Context) {
 
@@ -25,14 +26,19 @@ class TtsController(private val context: Context) {
             text?.let { intent.putExtra("extra_text", it) }
             speed?.let { intent.putExtra("extra_speed", it) }
             if (sentenceIndex > 0) intent.putExtra("extra_sentence_index", sentenceIndex)
-            context.startService(intent)
+            ContextCompat.startForegroundService(context, intent)
         } catch (e: Exception) {
             Log.e("TtsController", "startService failed", e)
         }
     }
 
     private fun startNormalService(action: String) {
-        startService(action)
+        val intent = Intent(context, TtsService::class.java).setAction(action)
+        try {
+            ContextCompat.startForegroundService(context, intent)
+        } catch (e: Exception) {
+            Log.e("TtsController", "startService failed", e)
+        }
     }
 
     companion object {

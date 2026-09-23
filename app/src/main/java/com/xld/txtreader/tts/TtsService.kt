@@ -166,6 +166,7 @@ class TtsService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startForeground(NOTIFICATION_ID, buildNotification(isSpeaking))
         Log.d("TtsService", "onStartCommand action=${intent?.action}")
         when (intent?.action) {
             TtsController.ACTION_PLAY -> {

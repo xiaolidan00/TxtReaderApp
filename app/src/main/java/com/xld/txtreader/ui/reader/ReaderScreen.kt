@@ -36,6 +36,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -87,6 +88,12 @@ fun ReaderScreen(onBack: () -> Unit) {
         vm.load()
     }
 
+    DisposableEffect(Unit) {
+        onDispose {
+            vm.persist()
+        }
+    }
+
     var activeSheet by remember { mutableStateOf<SheetKind?>(null) }
 
         val densities = LocalDensity.current
@@ -110,6 +117,7 @@ fun ReaderScreen(onBack: () -> Unit) {
                     fileName = state.fileName,
                     progress = if (state.totalChapter > 0) "第${state.currentChapter + 1}/${state.totalChapter}章" else "",
                     onBack = {
+                        vm.persist()
                         vm.backPage()
                         onBack()
                     },

@@ -316,6 +316,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             controller.stop()
             _state.update { it.copy(ttsPlaying = false) }
         }
+        persist()
     }
 
     fun currentGlobal(): Int {
@@ -428,6 +429,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             )
         }
         if (wasPlaying) ttsPlayCurrent()
+        persist()
     }
 
     fun consumeScroll() {
@@ -727,7 +729,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         return (ch).coerceAtMost(c.totalChapter - 1)
     }
 
-    private fun persist() {
+
+    fun persist() {
         val c = content ?: return
         persistJob?.cancel()
         persistJob = viewModelScope.launch {
