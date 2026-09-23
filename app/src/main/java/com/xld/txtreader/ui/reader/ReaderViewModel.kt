@@ -62,6 +62,7 @@ data class ReaderUiState(
     val ttsAvailable: Boolean = false,
     val ttsChapter: Int = 0,
     val ttsPageInChapter: Int = 0,
+    val ttsPagesInChapter: Int = 0,
     val ttsTotalChapter: Int = 0,
     val ttsBookTitle: String = "",
     val ttsChapterTitle: String = "",
@@ -70,7 +71,7 @@ data class ReaderUiState(
     val ttsHighlightRanges: List<IntRange> = emptyList(),
 ) {
     val ttsProgressText: String
-        get() = if (ttsTotalChapter > 0 && ttsChapter < ttsTotalChapter) "${ttsChapter + 1}/${ttsTotalChapter}" else "0/0"
+        get() = if (ttsPagesInChapter > 0) "${ttsPageInChapter + 1}/${ttsPagesInChapter}" else "0/0"
 }
 
 class ReaderViewModel(application: Application) : AndroidViewModel(application) {
@@ -99,7 +100,13 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 val g = currentGlobal()
                 val ch = chapterOf(g)
                 val local = g - (offsets.getOrNull(ch) ?: 0)
-                _state.update { it.copy(ttsChapter = ch, ttsPageInChapter = local) }
+                _state.update {
+                    it.copy(
+                        ttsChapter = ch,
+                        ttsPageInChapter = local,
+                        ttsPagesInChapter = pageList.getOrNull(ch)?.size ?: 0
+                    )
+                }
             }
             eventEmitter.on(EVENT_TTS_READY) { _ ->
                 _state.update { it.copy(ttsAvailable = true) }
@@ -131,42 +138,44 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                     val newHash = content?.text?.hashCode().toString()
                     if (newHash != lastContentHash) {
                         lastContentHash = newHash
-                        if (_state.value.ttsPlaying) {
-                            val ch = currentChapter
-                            val text = pageTextAt(currentGlobal())
-                            controller.play(text)
-                            _state.update {
-                                it.copy(
-                                    ttsChapter = ch,
-                                    ttsPageInChapter = currentPage
-                                )
-                            }
-                        }
-                    }
-                    delay(500)
-                }
-            }
-            // 监听 pageList 变化，自动更新 TTS 文本
-            viewModelScope.launch {
-                while (true) {
-                    val newEpoch = _state.value.pagesEpoch
-                    if (newEpoch != lastPageListEpoch) {
-                        lastPageListEpoch = newEpoch
-                        if (_state.value.ttsPlaying) {
-                            val ch = currentChapter
-                            val text = pageTextAt(currentGlobal())
-                            controller.play(text)
-                            _state.update {
-                                it.copy(
-                                    ttsChapter = ch,
-                                    ttsPageInChapter = currentPage
-                                )
-                            }
-                        }
-                    }
-                    delay(500)
-                }
-            }
+                         if (_state.value.ttsPlaying) {
+                             val ch = currentChapter
+                             val text = pageTextAt(currentGlobal())
+                             controller.play(text)
+                             _state.update {
+                                 it.copy(
+                                     ttsChapter = ch,
+                                     ttsPageInChapter = currentPage,
+                                     ttsPagesInChapter = pageList.getOrNull(ch)?.size ?: 0
+                                 )
+                             }
+                         }
+                     }
+                     delay(500)
+                 }
+             }
+             // 监听 pageList 变化，自动更新 TTS 文本
+             viewModelScope.launch {
+                 while (true) {
+                     val newEpoch = _state.value.pagesEpoch
+                     if (newEpoch != lastPageListEpoch) {
+                         lastPageListEpoch = newEpoch
+                         if (_state.value.ttsPlaying) {
+                             val ch = currentChapter
+                             val text = pageTextAt(currentGlobal())
+                             controller.play(text)
+                             _state.update {
+                                 it.copy(
+                                     ttsChapter = ch,
+                                     ttsPageInChapter = currentPage,
+                                     ttsPagesInChapter = pageList.getOrNull(ch)?.size ?: 0
+                                 )
+                             }
+                         }
+                     }
+                     delay(500)
+                 }
+             }
         }
         load()
     }
@@ -352,7 +361,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         ttsSentenceIndex = 0
         val wasPlaying = _state.value.ttsPlaying
         if (wasPlaying) {
-            _state.update { it.copy(ttsChapter = chapter) }
+            _state.update { it.copy(ttsChapter = chapter, ttsPagesInChapter = pageList.getOrNull(chapter)?.size ?: 0) }
         }
         val local = 0
         jumpTo(chapter, local)
@@ -372,7 +381,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         ttsSentenceIndex = 0
         val wasPlaying = _state.value.ttsPlaying
         if (wasPlaying) {
-            _state.update { it.copy(ttsChapter = chapter) }
+            _state.update { it.copy(ttsChapter = chapter, ttsPagesInChapter = pageList.getOrNull(chapter)?.size ?: 0) }
         }
         currentChapter = chapter
         currentPage = clamped
@@ -416,7 +425,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         ttsSentenceIndex = 0
         val wasPlaying = _state.value.ttsPlaying
         if (wasPlaying) {
-            _state.update { it.copy(ttsChapter = ch) }
+            _state.update { it.copy(ttsChapter = ch, ttsPagesInChapter = pageList.getOrNull(ch)?.size ?: 0) }
         }
         currentChapter = ch
         currentPage = local
@@ -573,6 +582,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 ttsPlaying = true,
                 ttsChapter = ch,
                 ttsPageInChapter = currentPage,
+                ttsPagesInChapter = pageList.getOrNull(ch)?.size ?: 0,
                 ttsBookTitle = c.fileName,
                 ttsChapterTitle = chTitle,
                 ttsTotalChapter = c.totalChapter

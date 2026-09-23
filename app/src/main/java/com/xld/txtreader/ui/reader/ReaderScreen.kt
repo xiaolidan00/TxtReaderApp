@@ -397,9 +397,9 @@ private fun TtsSheet(
     onSpeed: (Float) -> Unit,
 ) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
-        Text("语音朗读", style = MaterialTheme.typography.titleMedium)
+        Text("${fileName}", style = MaterialTheme.typography.titleMedium)
         Text(
-            "${fileName.take(20)} · ${if (chapterTitle.isBlank()) "尚未播放" else chapterTitle} (${progressText})",
+            "${if (chapterTitle.isBlank()) "尚未播放" else chapterTitle} (${progressText})",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),
