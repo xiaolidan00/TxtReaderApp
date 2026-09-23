@@ -17,6 +17,7 @@ import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
@@ -38,6 +39,7 @@ class TtsService : Service() {
 
     private lateinit var tts: TextToSpeech
     private lateinit var audioManager: AudioManager
+    private lateinit var wakeLock: PowerManager.WakeLock
     private var ready = false
     private var pendingText: String? = null
     private var pendingSentenceIndex: Int = 0
@@ -50,7 +52,17 @@ class TtsService : Service() {
     private val noisyReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
-                onAudioDeviceLost()
+                if (isSpeaking) {
+                    val text = currentText
+                    if (text != null && ready) {
+                        pendingStop = true
+                        runCatching { tts.stop() }
+                        pendingStop = false
+                        pendingText = text
+                        pendingSentenceIndex = sentenceIndex
+                        speakPage(text, sentenceIndex)
+                    }
+                }
             }
         }
     }
@@ -100,12 +112,14 @@ class TtsService : Service() {
                         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                         .build()
                 )
-                val fallback = listOf(Locale.CHINA, Locale.SIMPLIFIED_CHINESE, Locale.CHINESE, Locale.ENGLISH)
+                val fallback =
+                    listOf(Locale.CHINA, Locale.SIMPLIFIED_CHINESE, Locale.CHINESE, Locale.ENGLISH)
                 val available = tts.availableLanguages
                 Log.d("TtsService", "availableLanguages=$available")
-                val chosen = fallback.firstOrNull { locale -> available?.any { it.language == locale.language && it.country == locale.country } == true }
-                    ?: fallback.firstOrNull { locale -> available?.any { it.language == locale.language } == true }
-                    ?: Locale.getDefault()
+                val chosen =
+                    fallback.firstOrNull { locale -> available?.any { it.language == locale.language && it.country == locale.country } == true }
+                        ?: fallback.firstOrNull { locale -> available?.any { it.language == locale.language } == true }
+                        ?: Locale.getDefault()
                 tts.language = chosen
                 Log.d("TtsService", "language=$chosen")
                 tts.setSpeechRate(appSettings.ttsSpeed)
@@ -116,15 +130,18 @@ class TtsService : Service() {
                         eventEmitter.emit(EVENT_TTS_START)
                         updateNotification(true)
                     }
+
                     override fun onDone(utteranceId: String?) {
                         Log.d("TtsService", "onDone utterance=$utteranceId")
                         onUtteranceDone()
                     }
+
                     @Deprecated("Deprecated in Java")
                     override fun onError(utteranceId: String?) {
                         Log.e("TtsService", "onError utterance=$utteranceId")
                         onUtteranceDone()
                     }
+
                     override fun onError(utteranceId: String?, errorCode: Int) {
                         Log.e("TtsService", "onError utterance=$utteranceId code=$errorCode")
                         onUtteranceDone()
@@ -139,6 +156,12 @@ class TtsService : Service() {
                 speakPage(text, pendingSentenceIndex)
             }
         }
+        val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+        wakeLock =
+            powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TxtReaderApp::TtsWakeLock")
+                .apply {
+                    setReferenceCounted(false)
+                }
         tts = TextToSpeech(this, initListener)
     }
 
@@ -159,6 +182,7 @@ class TtsService : Service() {
                     }
                 }
             }
+
             TtsController.ACTION_TOGGLE -> {
                 if (isSpeaking) {
                     pause()
@@ -167,16 +191,26 @@ class TtsService : Service() {
                     if (text != null) speakPage(text, sentenceIndex)
                 }
             }
+
             TtsController.ACTION_PAUSE -> pause()
-            TtsController.ACTION_PREV_PAGE -> { /* 不再停止，保留 currentText 供自动续读 */ }
-            TtsController.ACTION_NEXT_PAGE -> { /* 不再停止，保留 currentText 供自动续读 */ }
-            TtsController.ACTION_PREV_CHAPTER -> { /* 不再停止，保留 currentText 供自动续读 */ }
-            TtsController.ACTION_NEXT_CHAPTER -> { /* 不再停止，保留 currentText 供自动续读 */ }
+            TtsController.ACTION_PREV_PAGE -> { /* 不再停止，保留 currentText 供自动续读 */
+            }
+
+            TtsController.ACTION_NEXT_PAGE -> { /* 不再停止，保留 currentText 供自动续读 */
+            }
+
+            TtsController.ACTION_PREV_CHAPTER -> { /* 不再停止，保留 currentText 供自动续读 */
+            }
+
+            TtsController.ACTION_NEXT_CHAPTER -> { /* 不再停止，保留 currentText 供自动续读 */
+            }
+
             TtsController.ACTION_SPEED -> {
                 val speed = intent.getFloatExtra("extra_speed", appSettings.ttsSpeed)
                 appSettings.ttsSpeed = speed
                 if (ready) runCatching { tts.setSpeechRate(speed) }
             }
+
             TtsController.ACTION_STOP -> stopService()
         }
         return START_STICKY
@@ -185,6 +219,7 @@ class TtsService : Service() {
     private fun speakPage(text: String?, startIndex: Int = 0) {
         if (text.isNullOrBlank()) return
         pendingStop = false
+        if (!wakeLock.isHeld) runCatching { wakeLock.acquire() }
         sentenceList = SentenceSegmenter.split(text)
         sentenceIndex = startIndex
         if (sentenceList.isEmpty()) {
@@ -223,6 +258,7 @@ class TtsService : Service() {
 
     private fun onPageDone() {
         isSpeaking = false
+        if (wakeLock.isHeld) wakeLock.release()
         sentenceList = emptyList()
         sentenceIndex = 0
         eventEmitter.emit(EVENT_TTS_DONE)
@@ -233,6 +269,7 @@ class TtsService : Service() {
         isSpeaking = false
         pendingStop = true
         runCatching { tts.stop() }
+        if (wakeLock.isHeld) wakeLock.release()
         updateNotification(false)
         stopSelf()
     }
@@ -241,6 +278,7 @@ class TtsService : Service() {
         isSpeaking = false
         pendingStop = true
         runCatching { tts.stop() }
+        if (wakeLock.isHeld) wakeLock.release()
         updateNotification(false)
         stopSelf()
     }
@@ -277,6 +315,7 @@ class TtsService : Service() {
         AudioDeviceInfo.TYPE_HEARING_AID,
         AudioDeviceInfo.TYPE_BLE_HEADSET,
         AudioDeviceInfo.TYPE_BLE_SPEAKER -> true
+
         else -> false
     }
 
@@ -295,15 +334,39 @@ class TtsService : Service() {
     }
 
     private fun buildNotification(playing: Boolean): Notification {
-        val prevIntent = Intent(this, TtsService::class.java).apply { action = TtsController.ACTION_PREV_PAGE }
-        val toggleIntent = Intent(this, TtsService::class.java).apply { action = TtsController.ACTION_TOGGLE }
-        val nextIntent = Intent(this, TtsService::class.java).apply { action = TtsController.ACTION_NEXT_PAGE }
-        val stopIntent = Intent(this, TtsService::class.java).apply { action = TtsController.ACTION_STOP }
+        val prevIntent =
+            Intent(this, TtsService::class.java).apply { action = TtsController.ACTION_PREV_PAGE }
+        val toggleIntent =
+            Intent(this, TtsService::class.java).apply { action = TtsController.ACTION_TOGGLE }
+        val nextIntent =
+            Intent(this, TtsService::class.java).apply { action = TtsController.ACTION_NEXT_PAGE }
+        val stopIntent =
+            Intent(this, TtsService::class.java).apply { action = TtsController.ACTION_STOP }
 
-        val prevPendingIntent = PendingIntent.getService(this, REQUEST_PREV, prevIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val togglePendingIntent = PendingIntent.getService(this, REQUEST_TOGGLE, toggleIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val nextPendingIntent = PendingIntent.getService(this, REQUEST_NEXT, nextIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val stopPendingIntent = PendingIntent.getService(this, REQUEST_STOP, stopIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val prevPendingIntent = PendingIntent.getService(
+            this,
+            REQUEST_PREV,
+            prevIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val togglePendingIntent = PendingIntent.getService(
+            this,
+            REQUEST_TOGGLE,
+            toggleIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val nextPendingIntent = PendingIntent.getService(
+            this,
+            REQUEST_NEXT,
+            nextIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val stopPendingIntent = PendingIntent.getService(
+            this,
+            REQUEST_STOP,
+            stopIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("TxtReader")
@@ -313,7 +376,11 @@ class TtsService : Service() {
             .setAutoCancel(false)
             .setOnlyAlertOnce(true)
             .addAction(R.drawable.ic_skip_prev, "上一页", prevPendingIntent)
-            .addAction(if (playing) R.drawable.ic_pause else R.drawable.ic_play, if (playing) "暂停" else "播放", togglePendingIntent)
+            .addAction(
+                if (playing) R.drawable.ic_pause else R.drawable.ic_play,
+                if (playing) "暂停" else "播放",
+                togglePendingIntent
+            )
             .addAction(R.drawable.ic_skip_next, "下一页", nextPendingIntent)
             .addAction(R.drawable.ic_close, "停止", stopPendingIntent)
             .build()
@@ -327,6 +394,7 @@ class TtsService : Service() {
         stopForeground(2) // STOP_FOREGROUND_REMOVE
         ready = false
         pendingStop = true
+        if (wakeLock.isHeld) wakeLock.release()
         runCatching { unregisterReceiver(noisyReceiver) }
         runCatching { audioManager.unregisterAudioDeviceCallback(audioDeviceCallback) }
         runCatching { tts.shutdown() }

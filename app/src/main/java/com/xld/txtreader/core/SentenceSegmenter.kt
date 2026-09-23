@@ -9,7 +9,6 @@ object SentenceSegmenter {
         if (text.isEmpty()) return emptyList()
         val rawSentences = splitRaw(text)
         return rawSentences
-        // return buildChunks(rawSentences)
     }
 
     private fun splitRaw(text: String): List<Sentence> {
