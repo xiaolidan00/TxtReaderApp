@@ -1,10 +1,24 @@
 # AGENTS.md — TxtReaderApp
 
+## 交互偏好
+
+- 语言:始终使用中文回复，代码注释与文档同步使用中文。
+- 行动优先:用户提出明确操作指令时，默认直接通过工具执行，而非仅列出操作步骤。
+- 精炼交付:回答直接聚焦核心结果与关键决策，避免重复输出无需解释的通用背景。
+
+## 操作与安全底线
+
+- 先读后改:修改已有文件前，读取完成本次修改所需的文件与上下文;大型文件按需读取相关范围，避免无关全量读取，严禁盲写覆盖。
+- 增量安全:除当前任务授权的目标文件外，保持其他文件与目录原样。
+- 删除守卫:严禁自主推断并执行文件或目录的永久删除(rm、清空目录等);仅在用户当前轮次提示词中明确指定了具体删除对象与路径时方可执行。
+- 环境隔离:Python优先使用当前激活的环境(Conda base/uv);Node.js遵循当前激活的nvm 版本;严禁全局提权安装可能污染系统的包
+
 ## 构建与运行
 
 只在build模式时进行构建验证，plan模式不进行构建验证
 
 android-studio中有JDK 21,地址在`D:\softwares\android-studio\jbr\bin`
+
 ```bash
 # Windows
 .\gradlew.bat :app:assembleDebug
@@ -129,18 +143,6 @@ TxtReaderApp/
 - 文本分句分块：先按句号等标点分句（用于高亮），再按每段≤200字分块（用于TTS播放）
 - 翻页/内容变化时从头开始朗读
 
-## 开发命令
-
-```bash
-# 构建调试版 APK
-.\gradlew.bat :app:assembleDebug
-
-# 清理构建
-.\gradlew.bat clean
-
-# 无测试套件，assembleDebug 即为验证
-```
-
 ## 重要注意事项
 
 ### 颜色处理
@@ -155,10 +157,6 @@ TxtReaderApp/
 ### Room KSP
 
 Room 编译器使用 KSP（非 kapt）。实体 `BookRecord` 使用 `@Upsert` 按 `filePath` 去重。
-
-### 图标
-
-仅使用 `material-icons-core` — 不要添加 `material-icons-extended`。自定义图标使用 `res/drawable/` 下的矢量图（ic_pause, ic_play, ic_sort, ic_chapters, ic_speaker, ic_skip_prev, ic_skip_next, ic_delete_record, ic_delete_file）。
 
 ### 导航路由
 
@@ -190,9 +188,3 @@ Room 编译器使用 KSP（非 kapt）。实体 `BookRecord` 使用 `@Upsert` �
 - 通知栏使用 `CATEGORY_TRANSPORT` + `FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK` 媒体播放通知
 - TtsService 通过 `onStartCommand` 接收 PendingIntent 通知栏按钮指令，转换为 `startService` 调用
 - `TtsBus` 已完全移除，UI 层 TTS 状态直接从 `ReaderUiState` 读取
-
-### 代码规范
-
-- 代码中不添加注释，除非明确要求
-- 使用 AutoMirrored 版本的图标（如 `Icons.AutoMirrored.Filled.ArrowBack`）
-- `AnimatedVisibility` 在 Column 作用域内使用全限定名 `androidx.compose.animation.AnimatedVisibility(...)` 避免 ColumnScope 扩展解析问题
