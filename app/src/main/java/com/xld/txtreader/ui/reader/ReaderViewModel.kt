@@ -140,44 +140,44 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                     val newHash = content?.text?.hashCode().toString()
                     if (newHash != lastContentHash) {
                         lastContentHash = newHash
-                         if (_state.value.ttsPlaying) {
-                             val ch = currentChapter
-                             val text = pageTextAt(currentGlobal())
-                             controller.play(text)
-                             _state.update {
-                                 it.copy(
-                                     ttsChapter = ch,
-                                     ttsPageInChapter = currentPage,
-                                     ttsPagesInChapter = pageList.getOrNull(ch)?.size ?: 0
-                                 )
-                             }
-                         }
-                     }
-                     delay(500)
-                 }
-             }
-             // 监听 pageList 变化，自动更新 TTS 文本
-             viewModelScope.launch {
-                 while (true) {
-                     val newEpoch = _state.value.pagesEpoch
-                     if (newEpoch != lastPageListEpoch) {
-                         lastPageListEpoch = newEpoch
-                         if (_state.value.ttsPlaying) {
-                             val ch = currentChapter
-                             val text = pageTextAt(currentGlobal())
-                             controller.play(text)
-                             _state.update {
-                                 it.copy(
-                                     ttsChapter = ch,
-                                     ttsPageInChapter = currentPage,
-                                     ttsPagesInChapter = pageList.getOrNull(ch)?.size ?: 0
-                                 )
-                             }
-                         }
-                     }
-                     delay(500)
-                 }
-             }
+                        if (_state.value.ttsPlaying) {
+                            val ch = currentChapter
+                            val text = pageTextAt(currentGlobal())
+                            controller.play(text)
+                            _state.update {
+                                it.copy(
+                                    ttsChapter = ch,
+                                    ttsPageInChapter = currentPage,
+                                    ttsPagesInChapter = pageList.getOrNull(ch)?.size ?: 0
+                                )
+                            }
+                        }
+                    }
+                    delay(500)
+                }
+            }
+            // 监听 pageList 变化，自动更新 TTS 文本
+            viewModelScope.launch {
+                while (true) {
+                    val newEpoch = _state.value.pagesEpoch
+                    if (newEpoch != lastPageListEpoch) {
+                        lastPageListEpoch = newEpoch
+                        if (_state.value.ttsPlaying) {
+                            val ch = currentChapter
+                            val text = pageTextAt(currentGlobal())
+                            controller.play(text)
+                            _state.update {
+                                it.copy(
+                                    ttsChapter = ch,
+                                    ttsPageInChapter = currentPage,
+                                    ttsPagesInChapter = pageList.getOrNull(ch)?.size ?: 0
+                                )
+                            }
+                        }
+                    }
+                    delay(500)
+                }
+            }
         }
         load()
     }
@@ -244,11 +244,13 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                         if (recordEncode != null && recordEncode != "自动") recordEncode
                         else normalizeEncoding(detectCharset(path)) ?: "UTF-8"
                     }
+
                     else -> requestedEncode
                 }
                 val decodeEncode = if (stateEncode == "自动") actualEncode else stateEncode
-                val text = contentUri?.let { EncodingReader.readText(getApplication(), it, decodeEncode) }
-                    ?: EncodingReader.readText(file ?: java.io.File(path), decodeEncode)
+                val text =
+                    contentUri?.let { EncodingReader.readText(getApplication(), it, decodeEncode) }
+                        ?: EncodingReader.readText(file ?: java.io.File(path), decodeEncode)
                 if (text.isBlank()) {
                     _state.update {
                         it.copy(
@@ -293,7 +295,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                     stateEncode,
                     regexStr,
                     regexType,
-                    record?.fileSize ?: previousContent?.fileSize ?: file?.length() ?: text.length.toLong()
+                    record?.fileSize ?: previousContent?.fileSize ?: file?.length()
+                    ?: text.length.toLong()
                 )
                 content = book
                 BookContentHolder = book
@@ -304,7 +307,6 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
 
                 _state.update {
                     it.copy(
-                        loading = false,
                         loadError = false,
                         loadErrorMessage = "",
                         filePath = path,
@@ -324,6 +326,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 paginateAll()
                 applyRestore(restoreChapter, restorePage)
+                _state.update { it.copy(loading = false) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -403,7 +406,12 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         ttsSentenceIndex = 0
         val wasPlaying = _state.value.ttsPlaying
         if (wasPlaying) {
-            _state.update { it.copy(ttsChapter = chapter, ttsPagesInChapter = pageList.getOrNull(chapter)?.size ?: 0) }
+            _state.update {
+                it.copy(
+                    ttsChapter = chapter,
+                    ttsPagesInChapter = pageList.getOrNull(chapter)?.size ?: 0
+                )
+            }
         }
         val local = 0
         jumpTo(chapter, local)
@@ -423,7 +431,12 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         ttsSentenceIndex = 0
         val wasPlaying = _state.value.ttsPlaying
         if (wasPlaying) {
-            _state.update { it.copy(ttsChapter = chapter, ttsPagesInChapter = pageList.getOrNull(chapter)?.size ?: 0) }
+            _state.update {
+                it.copy(
+                    ttsChapter = chapter,
+                    ttsPagesInChapter = pageList.getOrNull(chapter)?.size ?: 0
+                )
+            }
         }
         currentChapter = chapter
         currentPage = clamped
@@ -466,7 +479,12 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         ttsSentenceIndex = 0
         val wasPlaying = _state.value.ttsPlaying
         if (wasPlaying) {
-            _state.update { it.copy(ttsChapter = ch, ttsPagesInChapter = pageList.getOrNull(ch)?.size ?: 0) }
+            _state.update {
+                it.copy(
+                    ttsChapter = ch,
+                    ttsPagesInChapter = pageList.getOrNull(ch)?.size ?: 0
+                )
+            }
         }
         currentChapter = ch
         currentPage = local
@@ -568,7 +586,15 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             value.trim().uppercase() in setOf("自动", "AUTO") -> "自动"
             value.trim().uppercase() == "GBK" -> "GBK"
             value.trim().uppercase() in setOf("UTF8", "UTF-8") -> "UTF-8"
-            value.trim().uppercase() in setOf("UTF16", "UTF-16", "UTF16LE", "UTF-16LE", "UTF16BE", "UTF-16BE") -> "UTF-16"
+            value.trim().uppercase() in setOf(
+                "UTF16",
+                "UTF-16",
+                "UTF16LE",
+                "UTF-16LE",
+                "UTF16BE",
+                "UTF-16BE"
+            ) -> "UTF-16"
+
             else -> null
         }
 

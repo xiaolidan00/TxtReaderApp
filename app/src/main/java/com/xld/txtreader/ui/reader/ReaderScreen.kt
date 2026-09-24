@@ -1,5 +1,7 @@
 package com.xld.txtreader.ui.reader
 
+import android.app.Activity
+import android.view.View
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -96,7 +98,7 @@ fun ReaderScreen(onBack: () -> Unit) {
 
     var activeSheet by remember { mutableStateOf<SheetKind?>(null) }
 
-        val densities = LocalDensity.current
+    val densities = LocalDensity.current
     val padXPx = with(densities) { 20.dp.toPx() }
     val padYPx = with(densities) { 12.dp.toPx() }
 
@@ -112,7 +114,9 @@ fun ReaderScreen(onBack: () -> Unit) {
                 .navigationBarsPadding(),
         ) {
             // Top bar slot
-            Box(Modifier.fillMaxWidth().height(56.dp)) {
+            Box(Modifier
+                .fillMaxWidth()
+                .height(56.dp)) {
                 ReaderTopBar(
                     fileName = state.fileName,
                     progress = if (state.totalChapter > 0) "第${state.currentChapter + 1}/${state.totalChapter}章" else "",
@@ -131,18 +135,20 @@ fun ReaderScreen(onBack: () -> Unit) {
                     .weight(1f)
                     .fillMaxWidth()
                     .onSizeChanged { size ->
-                        vm.setViewport(size.width - (2 * padXPx).toInt(), size.height - (2 * padYPx).toInt(), densities.density)
+                        vm.setViewport(
+                            size.width - (2 * padXPx).toInt(),
+                            size.height - (2 * padYPx).toInt(),
+                            densities.density
+                        )
                     },
             ) {
                 when {
-                    state.loading -> {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator()
-                        }
-                    }
                     state.loadError -> {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(32.dp)
+                            ) {
                                 Text(
                                     state.loadErrorMessage.ifBlank { "加载失败" },
                                     style = MaterialTheme.typography.bodyLarge,
@@ -159,11 +165,13 @@ fun ReaderScreen(onBack: () -> Unit) {
                             }
                         }
                     }
+
                     state.totalPages == 0 -> {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text("该书为空")
                         }
                     }
+
                     else -> {
                         ReaderPagerHost(
                             vm = vm,
@@ -175,7 +183,10 @@ fun ReaderScreen(onBack: () -> Unit) {
             }
 
             // Bottom bar slot
-            Box(Modifier.fillMaxWidth().height(56.dp).navigationBarsPadding()) {
+            Box(Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .navigationBarsPadding()) {
                 ReaderTabBar(
                     onChapter = { activeSheet = SheetKind.CHAPTERS },
                     onTts = {
@@ -191,6 +202,17 @@ fun ReaderScreen(onBack: () -> Unit) {
                 )
             }
         }
+
+        if (state.loading) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color(0x80000000)),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator()
+            }
+        }
     }
 
     activeSheet?.let { sheet ->
@@ -202,6 +224,7 @@ fun ReaderScreen(onBack: () -> Unit) {
                     chapters = state.chapters,
                     onJump = { chapter -> vm.jumpChapter(chapter); activeSheet = null },
                 )
+
                 SheetKind.TTS -> TtsSheet(
                     playing = state.ttsPlaying,
                     available = state.ttsAvailable,
@@ -218,11 +241,13 @@ fun ReaderScreen(onBack: () -> Unit) {
                     onNextChapter = vm::ttsNextChapter,
                     onSpeed = vm::ttsSpeed,
                 )
+
                 SheetKind.SEARCH -> SearchSheet(
                     state = state,
                     onSearch = vm::search,
                     onJump = { hit -> vm.jumpToHit(hit, state.searchKeyword); activeSheet = null },
                 )
+
                 SheetKind.SETTINGS -> SettingsSheet(
                     state = state,
                     onFont = vm::setFont,
@@ -258,7 +283,11 @@ private fun ReaderTopBar(
         Column(Modifier.weight(1f)) {
             Text(fileName, style = MaterialTheme.typography.titleMedium, maxLines = 1)
             if (progress.isNotEmpty()) {
-                Text(progress, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    progress,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
@@ -300,7 +329,11 @@ private fun ReaderTab(
     ) {
         IconButton(onClick = onClick, modifier = Modifier.size(32.dp)) {
             if (drawableIcon != null) {
-                Icon(painterResource(drawableIcon), contentDescription = label, modifier = Modifier.size(24.dp))
+                Icon(
+                    painterResource(drawableIcon),
+                    contentDescription = label,
+                    modifier = Modifier.size(24.dp)
+                )
             }
         }
     }
@@ -345,7 +378,9 @@ private fun ReaderPagerHost(
         } else highlighted
         Text(
             text = sentenceHighlighted,
-            modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 12.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
             style = androidx.compose.ui.text.TextStyle(
                 fontSize = state.fontSp.sp,
                 lineHeight = (state.fontSp * state.lineSpacing).sp,
@@ -362,7 +397,11 @@ private fun ChapterSheet(
     chapters: List<String>,
     onJump: (Int) -> Unit,
 ) {
-    Text("章节目录", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+    Text(
+        "章节目录",
+        style = MaterialTheme.typography.titleMedium,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+    )
     LazyColumn(Modifier.height(360.dp)) {
         itemsIndexed(chapters) { index, title ->
             Row(
@@ -396,7 +435,9 @@ private fun TtsSheet(
     onNextChapter: () -> Unit,
     onSpeed: (Float) -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+    Column(Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 24.dp)) {
         Text("${fileName}", style = MaterialTheme.typography.titleMedium)
         Text(
             "${if (chapterTitle.isBlank()) "尚未播放" else chapterTitle} (${progressText})",
@@ -406,12 +447,22 @@ private fun TtsSheet(
         )
 
         Row(
-            Modifier.fillMaxWidth().padding(top = 16.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ControlButton(onClick = onPrevChapter, icon = { Icon(painterResource(R.drawable.ic_keyboard_arrow_left), null) }, label = "上一章")
-            ControlButton(onClick = onPrevPage, icon = { Icon(painterResource(R.drawable.ic_keyboard_arrow_left), null) }, label = "上一页")
+            ControlButton(
+                onClick = onPrevChapter,
+                icon = { Icon(painterResource(R.drawable.ic_keyboard_arrow_left), null) },
+                label = "上一章"
+            )
+            ControlButton(
+                onClick = onPrevPage,
+                icon = { Icon(painterResource(R.drawable.ic_keyboard_arrow_left), null) },
+                label = "上一页"
+            )
             Box(
                 Modifier
                     .size(64.dp)
@@ -420,28 +471,64 @@ private fun TtsSheet(
                 contentAlignment = Alignment.Center,
             ) {
                 if (playing) {
-                    Icon(painterResource(R.drawable.ic_pause), contentDescription = "暂停", tint = Color.White, modifier = Modifier.size(32.dp))
+                    Icon(
+                        painterResource(R.drawable.ic_pause),
+                        contentDescription = "暂停",
+                        tint = Color.White,
+                        modifier = Modifier.size(32.dp)
+                    )
                 } else {
-                    Icon(painterResource(R.drawable.ic_play), contentDescription = "播放", tint = Color.White, modifier = Modifier.size(32.dp))
+                    Icon(
+                        painterResource(R.drawable.ic_play),
+                        contentDescription = "播放",
+                        tint = Color.White,
+                        modifier = Modifier.size(32.dp)
+                    )
                 }
             }
-            ControlButton(onClick = onNextPage, icon = { Icon(painterResource(R.drawable.ic_keyboard_arrow_right), null) }, label = "下一页")
-            ControlButton(onClick = onNextChapter, icon = { Icon(painterResource(R.drawable.ic_keyboard_arrow_right), null) }, label = "下一章")
+            ControlButton(
+                onClick = onNextPage,
+                icon = { Icon(painterResource(R.drawable.ic_keyboard_arrow_right), null) },
+                label = "下一页"
+            )
+            ControlButton(
+                onClick = onNextChapter,
+                icon = { Icon(painterResource(R.drawable.ic_keyboard_arrow_right), null) },
+                label = "下一章"
+            )
         }
 
-        Text("播放速度", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 16.dp))
+        Text(
+            "播放速度",
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(top = 16.dp)
+        )
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("1.0x", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                "1.0x",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Slider(
                 value = speed,
                 onValueChange = onSpeed,
                 valueRange = 1f..3f,
-                modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                steps=1
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp),
+                steps = 1
             )
-            Text("3.0x", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                "3.0x",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
-        Text("当前语速 ${String.format(java.util.Locale.CHINA, "%.2f", speed)}x", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            "当前语速 ${String.format(java.util.Locale.CHINA, "%.2f", speed)}x",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -452,11 +539,17 @@ private fun ControlButton(
     label: String,
 ) {
     Column(
-        Modifier.clickable(onClick = onClick).padding(8.dp),
+        Modifier
+            .clickable(onClick = onClick)
+            .padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         icon()
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -466,17 +559,25 @@ private fun SearchSheet(
     onSearch: (String) -> Unit,
     onJump: (BookSearcher.Hit) -> Unit,
 ) {
-    Text("搜索内容", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 16.dp))
+    Text(
+        "搜索内容",
+        style = MaterialTheme.typography.titleMedium,
+        modifier = Modifier.padding(horizontal = 16.dp)
+    )
     OutlinedTextField(
         value = state.searchKeyword,
         onValueChange = onSearch,
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
         placeholder = { Text("输入关键词搜索全书") },
         leadingIcon = { Icon(painterResource(R.drawable.ic_search), null) },
         singleLine = true,
     )
     if (state.searching) {
-        Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier
+            .fillMaxWidth()
+            .padding(16.dp), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.dp)
         }
     } else if (state.searchResults.isEmpty() && state.searchKeyword.isNotBlank()) {
@@ -529,7 +630,11 @@ private fun highlightKeyword(snippet: String, keyword: String): AnnotatedString 
     }
 }
 
-private fun highlightSentence(text: AnnotatedString, index: Int, ranges: List<IntRange>): AnnotatedString {
+private fun highlightSentence(
+    text: AnnotatedString,
+    index: Int,
+    ranges: List<IntRange>
+): AnnotatedString {
     if (index < 0 || ranges.size <= index) return text
     val range = ranges[index]
     if (range.start < 0 || range.endInclusive >= text.length) return text
@@ -546,6 +651,8 @@ private val TEXT_COLORS = listOf(
     0xFF333333 to "深灰",
     0xFF1A237E to "深蓝",
     0xFF4E342E to "棕",
+    0xFFFFFFFF to "白",
+    0xFFCCCCCC to "灰",
 )
 private val BG_COLORS = listOf(
     0xFFFFF9F0 to "米白",
@@ -576,7 +683,11 @@ private fun SettingsSheet(
     ) {
         Text("阅读设置", style = MaterialTheme.typography.titleMedium)
 
-        Text("字体大小", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 12.dp))
+        Text(
+            "字体大小",
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(top = 12.dp)
+        )
         Row(verticalAlignment = Alignment.CenterVertically) {
             Slider(state.fontSp, onFont, valueRange = 12f..32f, modifier = Modifier.weight(1f))
             Text("${state.fontSp.toInt()}px", style = MaterialTheme.typography.bodySmall)
@@ -584,18 +695,34 @@ private fun SettingsSheet(
 
         Text("行高", style = MaterialTheme.typography.bodyMedium)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Slider(state.lineSpacing, onLineSpacing, valueRange = 1f..3f, modifier = Modifier.weight(1f))
-            Text("${String.format(java.util.Locale.CHINA, "%.1f", state.lineSpacing)}x", style = MaterialTheme.typography.bodySmall)
+            Slider(
+                state.lineSpacing,
+                onLineSpacing,
+                valueRange = 1f..3f,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                "${String.format(java.util.Locale.CHINA, "%.1f", state.lineSpacing)}x",
+                style = MaterialTheme.typography.bodySmall
+            )
         }
 
-        Text("字体颜色", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 12.dp))
+        Text(
+            "字体颜色",
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(top = 12.dp)
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             TEXT_COLORS.forEach { (argb, name) ->
                 ColorChip(argb, name, state.textColor == argb) { onTextColor(argb) }
             }
         }
 
-        Text("背景颜色", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 16.dp))
+        Text(
+            "背景颜色",
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(top = 16.dp)
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             BG_COLORS.forEach { (argb, name) ->
                 ColorChip(argb, name, state.bgColor == argb) { onBgColor(argb) }
@@ -606,17 +733,27 @@ private fun SettingsSheet(
         var encodeExpanded by remember { mutableStateOf(false) }
         var customRegex by remember { mutableStateOf(state.regexStr) }
 
-        Text("章节匹配规则", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 20.dp))
-        ExposedDropdownMenuBox(expanded = regexExpanded, onExpandedChange = { regexExpanded = it }) {
+        Text(
+            "章节匹配规则",
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(top = 20.dp)
+        )
+        ExposedDropdownMenuBox(
+            expanded = regexExpanded,
+            onExpandedChange = { regexExpanded = it }) {
             OutlinedTextField(
                 value = RegexPresets.list.getOrNull(state.regexType)?.name ?: "自定义",
                 onValueChange = {},
                 readOnly = true,
                 label = { Text("正则规则") },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = regexExpanded) },
-                modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(MenuAnchorType.PrimaryNotEditable),
             )
-            ExposedDropdownMenu(expanded = regexExpanded, onDismissRequest = { regexExpanded = false }) {
+            ExposedDropdownMenu(
+                expanded = regexExpanded,
+                onDismissRequest = { regexExpanded = false }) {
                 RegexPresets.list.forEachIndexed { index, preset ->
                     DropdownMenuItem(
                         text = { Text(preset.name) },
@@ -632,25 +769,39 @@ private fun SettingsSheet(
                 onValueChange = { customRegex = it },
                 label = { Text("自定义正则表达式") },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
             )
             Button(
                 onClick = { onRegexCustom(customRegex) },
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
             ) { Text("应用") }
         }
 
-        Text("编码方式", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 16.dp))
-        ExposedDropdownMenuBox(expanded = encodeExpanded, onExpandedChange = { encodeExpanded = it }) {
+        Text(
+            "编码方式",
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(top = 16.dp)
+        )
+        ExposedDropdownMenuBox(
+            expanded = encodeExpanded,
+            onExpandedChange = { encodeExpanded = it }) {
             OutlinedTextField(
                 value = state.encodeStr,
                 onValueChange = {},
                 readOnly = true,
                 label = { Text("编码") },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = encodeExpanded) },
-                modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(MenuAnchorType.PrimaryNotEditable),
             )
-            ExposedDropdownMenu(expanded = encodeExpanded, onDismissRequest = { encodeExpanded = false }) {
+            ExposedDropdownMenu(
+                expanded = encodeExpanded,
+                onDismissRequest = { encodeExpanded = false }) {
                 listOf("自动", "GBK", "UTF-8", "UTF-16").forEach { encoding ->
                     DropdownMenuItem(
                         text = { Text(encoding) },
@@ -659,7 +810,12 @@ private fun SettingsSheet(
                 }
             }
         }
-        Text("切换编码后会自动重新解析章节", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+        Text(
+            "切换编码后会自动重新解析章节",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp)
+        )
     }
 }
 
@@ -673,8 +829,16 @@ private fun ColorChip(argb: Long, name: String, selected: Boolean, onClick: () -
             Modifier
                 .size(32.dp)
                 .background(Color(argb.toInt()), CircleShape)
-                .border(if (selected) 3.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, CircleShape),
+                .border(
+                    if (selected) 3.dp else 1.dp,
+                    if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                    CircleShape
+                ),
         )
-        Text(name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            name,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
