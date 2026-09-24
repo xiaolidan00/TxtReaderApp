@@ -112,9 +112,11 @@ fun ReaderScreen(onBack: () -> Unit) {
                 .navigationBarsPadding(),
         ) {
             // Top bar slot
-            Box(Modifier
-                .fillMaxWidth()
-                .height(56.dp)) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+            ) {
                 ReaderTopBar(
                     fileName = state.fileName,
                     progress = if (state.totalChapter > 0) "第${state.currentChapter + 1}/${state.totalChapter}章" else "",
@@ -181,10 +183,12 @@ fun ReaderScreen(onBack: () -> Unit) {
             }
 
             // Bottom bar slot
-            Box(Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-                .navigationBarsPadding()) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .navigationBarsPadding()
+            ) {
                 ReaderTabBar(
                     onChapter = { activeSheet = SheetKind.CHAPTERS },
                     onTts = {
@@ -433,9 +437,11 @@ private fun TtsSheet(
     onNextChapter: () -> Unit,
     onSpeed: (Float) -> Unit,
 ) {
-    Column(Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 24.dp)) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+    ) {
         Text("${fileName}", style = MaterialTheme.typography.titleMedium)
         Text(
             "${if (chapterTitle.isBlank()) "尚未播放" else chapterTitle} (${progressText})",
@@ -573,9 +579,11 @@ private fun SearchSheet(
         singleLine = true,
     )
     if (state.searching) {
-        Box(Modifier
-            .fillMaxWidth()
-            .padding(16.dp), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .padding(16.dp), contentAlignment = Alignment.Center
+        ) {
             CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.dp)
         }
     } else if (state.searchResults.isEmpty() && state.searchKeyword.isNotBlank()) {
@@ -687,7 +695,13 @@ private fun SettingsSheet(
             modifier = Modifier.padding(top = 12.dp)
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Slider(state.fontSp, onFont, valueRange = 12f..32f, modifier = Modifier.weight(1f))
+            Slider(
+                state.fontSp,
+                onFont,
+                valueRange = 12f..32f,
+                steps = 1,
+                modifier = Modifier.weight(1f)
+            )
             Text("${state.fontSp.toInt()}px", style = MaterialTheme.typography.bodySmall)
         }
 
@@ -696,7 +710,7 @@ private fun SettingsSheet(
             Slider(
                 state.lineSpacing,
                 onLineSpacing,
-                valueRange = 1f..3f,
+                valueRange = 1f..3f, steps = 1,
                 modifier = Modifier.weight(1f)
             )
             Text(
