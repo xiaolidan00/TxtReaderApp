@@ -431,14 +431,15 @@ private fun TtsSheet(
 
         Text("播放速度", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 16.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("0.5x", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("1.0x", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Slider(
                 value = speed,
                 onValueChange = onSpeed,
-                valueRange = 0.5f..2.0f,
+                valueRange = 1f..3f,
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                steps=1
             )
-            Text("2.0x", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("3.0x", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text("当前语速 ${String.format(java.util.Locale.CHINA, "%.2f", speed)}x", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
@@ -650,10 +651,10 @@ private fun SettingsSheet(
                 modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
             )
             ExposedDropdownMenu(expanded = encodeExpanded, onDismissRequest = { encodeExpanded = false }) {
-                listOf("UTF-8", "GBK").forEach { enc ->
+                listOf("自动", "GBK", "UTF-8", "UTF-16").forEach { encoding ->
                     DropdownMenuItem(
-                        text = { Text(enc) },
-                        onClick = { onEncode(enc); encodeExpanded = false },
+                        text = { Text(encoding) },
+                        onClick = { onEncode(encoding); encodeExpanded = false },
                     )
                 }
             }

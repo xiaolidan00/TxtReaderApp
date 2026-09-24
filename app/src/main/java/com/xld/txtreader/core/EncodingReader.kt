@@ -34,8 +34,21 @@ object EncodingReader {
         if (size >= 2 && (bytes[0].toInt() and 0xFF) == 0xFE && (bytes[1].toInt() and 0xFF) == 0xFF) {
             return String(bytes, 2, size - 2, StandardCharsets.UTF_16BE)
         }
-        val charset = runCatching { Charset.forName(charsetName) }.getOrDefault(StandardCharsets.UTF_8)
-        return String(bytes, charset)
+        val charset = when {
+            charsetName == "UTF-16" -> StandardCharsets.UTF_16
+            charsetName == "UTF-16LE" -> StandardCharsets.UTF_16LE
+            charsetName == "UTF-16BE" -> StandardCharsets.UTF_16BE
+            else -> runCatching { Charset.forName(charsetName) }.getOrDefault(StandardCharsets.UTF_8)
+        }
+        return try {
+            String(bytes, charset)
+        } catch (e: Exception) {
+            if (charset == StandardCharsets.UTF_16) {
+                String(bytes, StandardCharsets.UTF_16LE)
+            } else {
+                String(bytes, StandardCharsets.UTF_8)
+            }
+        }
     }
 
     fun detectCharset(file: File): String = detectCharset(file.readBytes())
@@ -46,6 +59,8 @@ object EncodingReader {
     }
 
     fun detectCharset(bytes: ByteArray): String {
+        if (bytes.size >= 2 && (bytes[0].toInt() and 0xFF) == 0xFF && (bytes[1].toInt() and 0xFF) == 0xFE) return "UTF-16LE"
+        if (bytes.size >= 2 && (bytes[0].toInt() and 0xFF) == 0xFE && (bytes[1].toInt() and 0xFF) == 0xFF) return "UTF-16BE"
         try {
             val decoder = StandardCharsets.UTF_8.newDecoder()
                 .onMalformedInput(CodingErrorAction.REPORT)

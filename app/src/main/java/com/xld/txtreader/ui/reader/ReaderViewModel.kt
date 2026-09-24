@@ -22,6 +22,7 @@ import com.xld.txtreader.EVENT_TTS_SENTENCE_START
 import com.xld.txtreader.EVENT_TTS_START
 import com.xld.txtreader.EVENT_TTS_READY
 import com.xld.txtreader.EVENT_TTS_STOPPED
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -50,7 +51,7 @@ data class ReaderUiState(
     val bgColor: Long = 0xFFFFF9F0,
     val regexType: Int = 0,
     val regexStr: String = "",
-    val encodeStr: String = "UTF-8",
+    val encodeStr: String = "自动",
     val pagesEpoch: Int = 0,
     val scrollEpoch: Int = 0,
     val pendingScroll: Int? = null,
@@ -90,6 +91,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     private var currentPage = 0
     private var lastContentHash: String? = null
     private var lastPageListEpoch: Int = 0
+    private var loadJob: Job? = null
     private var persistJob: Job? = null
     private var ttsSentenceIndex = 0
 
@@ -180,8 +182,20 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         load()
     }
 
-    fun load() {
+    fun load(encodeOverride: String? = null) {
+        val requestedEncode = encodeOverride?.let { normalizeEncoding(it) }
+        if (encodeOverride != null && requestedEncode == null) return
+
+        loadJob?.cancel()
         val path = OpenBookStore.filePath
+        _state.update {
+            it.copy(
+                loading = true,
+                loadError = false,
+                loadErrorMessage = "",
+                encodeStr = requestedEncode ?: "自动",
+            )
+        }
         if (path.isNullOrBlank()) {
             _state.update {
                 it.copy(
@@ -192,10 +206,13 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             }
             return
         }
-        viewModelScope.launch(context = Dispatchers.IO) {
+        loadJob = viewModelScope.launch(context = Dispatchers.IO) {
             try {
-                val file = java.io.File(path)
-                if (!file.exists()) {
+                val contentUri = runCatching { android.net.Uri.parse(path) }
+                    .getOrNull()
+                    ?.takeIf { it.scheme == "content" }
+                val file = if (contentUri == null) java.io.File(path) else null
+                if (file != null && !file.exists()) {
                     _state.update {
                         it.copy(
                             loading = false,
@@ -205,7 +222,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                     }
                     return@launch
                 }
-                if (!file.canRead()) {
+                if (file != null && !file.canRead()) {
                     _state.update {
                         it.copy(
                             loading = false,
@@ -216,8 +233,22 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                     return@launch
                 }
                 val record = repo.get(path)
-                val encode = record?.encodeStr ?: "UTF-8"
-                val text = EncodingReader.readText(file, encode)
+                val stateEncode = requestedEncode
+                    ?: record?.encodeStr?.takeIf { it != "自动" }?.let { normalizeEncoding(it) }
+                    ?: "自动"
+                _state.update { it.copy(encodeStr = stateEncode) }
+                val actualEncode = when (requestedEncode) {
+                    "自动" -> normalizeEncoding(detectCharset(path)) ?: "UTF-8"
+                    null -> {
+                        val recordEncode = record?.encodeStr?.let { normalizeEncoding(it) }
+                        if (recordEncode != null && recordEncode != "自动") recordEncode
+                        else normalizeEncoding(detectCharset(path)) ?: "UTF-8"
+                    }
+                    else -> requestedEncode
+                }
+                val decodeEncode = if (stateEncode == "自动") actualEncode else stateEncode
+                val text = contentUri?.let { EncodingReader.readText(getApplication(), it, decodeEncode) }
+                    ?: EncodingReader.readText(file ?: java.io.File(path), decodeEncode)
                 if (text.isBlank()) {
                     _state.update {
                         it.copy(
@@ -236,30 +267,40 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                         it.copy(
                             loading = false,
                             loadError = true,
-                            loadErrorMessage = "编码不匹配，文件内容显示为乱码\n当前编码：$encode\n请在设置中选择正确的编码方式"
+                            loadErrorMessage = "编码不匹配，文件内容显示为乱码\n当前编码：$decodeEncode\n请在设置中选择正确的编码方式"
                         )
                     }
                     return@launch
                 }
-                val fileName = record?.fileName ?: file.name
-                val regexType = record?.regexType ?: 0
-                val regexStr = record?.regexStr ?: RegexPresets.list[regexType].value
+                val previousContent = content?.takeIf { it.filePath == path }
+                val fileName = record?.fileName
+                    ?: previousContent?.fileName
+                    ?: file?.name
+                    ?: contentUri?.lastPathSegment?.substringAfterLast('/')
+                    ?: "unknown.txt"
+                val regexType = record?.regexType?.takeIf { it in RegexPresets.list.indices }
+                    ?: previousContent?.regexType
+                    ?: 0
+                val regexStr = record?.regexStr?.takeIf { it.isNotBlank() }
+                    ?: previousContent?.regexStr
+                    ?: RegexPresets.list[regexType].value
                 val chapters = ChapterParser.parse(text, regexStr)
                 val book = BookContent(
                     path,
                     fileName,
                     text,
                     chapters,
-                    encode,
+                    stateEncode,
                     regexStr,
                     regexType,
-                    record?.fileSize ?: 0L
+                    record?.fileSize ?: previousContent?.fileSize ?: file?.length() ?: text.length.toLong()
                 )
                 content = book
                 BookContentHolder = book
+                repo.updateEncode(path, stateEncode)
 
-                val restoreChapter = (record?.currentChapter ?: 0)
-                val restorePage = (record?.pageIndex ?: 0)
+                val restoreChapter = record?.currentChapter ?: _state.value.currentChapter
+                val restorePage = record?.pageIndex ?: _state.value.currentPage
 
                 _state.update {
                     it.copy(
@@ -278,11 +319,13 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                         bgColor = settings.bgColorArgb,
                         regexType = regexType,
                         regexStr = regexStr,
-                        encodeStr = encode,
+                        encodeStr = stateEncode,
                     )
                 }
                 paginateAll()
                 applyRestore(restoreChapter, restorePage)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 val msg = when {
                     e is java.io.FileNotFoundException -> "文件不存在：$path"
@@ -520,38 +563,33 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    private fun normalizeEncoding(value: String): String? =
+        when {
+            value.trim().uppercase() in setOf("自动", "AUTO") -> "自动"
+            value.trim().uppercase() == "GBK" -> "GBK"
+            value.trim().uppercase() in setOf("UTF8", "UTF-8") -> "UTF-8"
+            value.trim().uppercase() in setOf("UTF16", "UTF-16", "UTF16LE", "UTF-16LE", "UTF16BE", "UTF-16BE") -> "UTF-16"
+            else -> null
+        }
+
+    private fun detectCharset(path: String): String = runCatching {
+        val uri = runCatching { android.net.Uri.parse(path) }.getOrNull()
+        if (uri?.scheme == "content") {
+            EncodingReader.detectCharset(getApplication(), uri)
+        } else {
+            EncodingReader.detectCharset(java.io.File(path))
+        }
+    }.getOrDefault("UTF-8")
+
     fun setEncode(encode: String) {
-        val c = content ?: return
-        if (encode == c.encodeStr) {
-            _state.update { it.copy(encodeStr = encode) }
+        val selectedEncode = normalizeEncoding(encode) ?: return
+        if (selectedEncode == "自动") {
+            if (content?.encodeStr == "自动" && !_state.value.loadError) return
+            load("自动")
             return
         }
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
-                val uri = runCatching { android.net.Uri.parse(c.filePath) }.getOrNull()
-                val text = if (uri?.scheme == "content") {
-                    EncodingReader.readText(getApplication(), uri, encode)
-                } else {
-                    EncodingReader.readText(java.io.File(c.filePath), encode)
-                }
-                val chapters = ChapterParser.parse(text, c.regexStr)
-                val updated = BookContent(
-                    c.filePath,
-                    c.fileName,
-                    text,
-                    chapters,
-                    encode,
-                    c.regexStr,
-                    c.regexType,
-                    c.fileSize
-                )
-                content = updated
-                BookContentHolder = updated
-                repo.updateEncode(c.filePath, encode)
-                paginateAndRestoreChapterList(updated, c.regexType, c.regexStr)
-                _state.update { it.copy(encodeStr = encode) }
-            }
-        }
+        if (content?.encodeStr == selectedEncode && !_state.value.loadError) return
+        load(selectedEncode)
     }
 
     fun search(keyword: String) {

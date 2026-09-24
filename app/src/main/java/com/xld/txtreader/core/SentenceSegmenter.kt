@@ -3,7 +3,7 @@ package com.xld.txtreader.core
 data class Sentence(val text: String, val start: Int, val end: Int)
 
 object SentenceSegmenter {
-    private val sentenceEnders = listOf('。', '！', '？', '；', '：', '!', '?', ',', '，','#','"','“','”','(',')','（','）','[',']','【','】')
+    private val sentenceEnders = listOf('。', '！', '？', '；', '!', '?')
 
     fun split(text: String): List<Sentence> {
         if (text.isEmpty()) return emptyList()
