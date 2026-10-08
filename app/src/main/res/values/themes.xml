@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+    <!-- 亮色主题；夜间变体见 values-night/themes.xml（框架主题无 DayNight，需按限定符分目录） -->
     <style name="Theme.TxtReader" parent="android:Theme.Material.Light.NoActionBar" />
 </resources>

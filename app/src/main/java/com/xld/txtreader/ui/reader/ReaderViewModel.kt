@@ -49,6 +49,8 @@ data class ReaderUiState(
     val lineSpacing: Float = 2f,
     val textColor: Long = 0xFF333333,
     val bgColor: Long = 0xFFFFF9F0,
+    val textColorCustom: Boolean = false,
+    val bgColorCustom: Boolean = false,
     val regexType: Int = 0,
     val regexStr: String = "",
     val encodeStr: String = "自动",
@@ -317,8 +319,12 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                         totalChapter = chapters.size,
                         fontSp = settings.fontSizeSp,
                         lineSpacing = settings.lineSpacingMult,
-                        textColor = settings.textColorArgb,
-                        bgColor = settings.bgColorArgb,
+                        textColorCustom = settings.textColorCustom,
+                        bgColorCustom = settings.bgColorCustom,
+                        textColor = if (settings.textColorCustom) settings.textColorArgb
+                            else if (isSystemDark()) DARK_TEXT_COLOR else LIGHT_TEXT_COLOR,
+                        bgColor = if (settings.bgColorCustom) settings.bgColorArgb
+                            else if (isSystemDark()) DARK_BG_COLOR else LIGHT_BG_COLOR,
                         regexType = regexType,
                         regexStr = regexStr,
                         encodeStr = stateEncode,
@@ -525,12 +531,30 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setTextColor(value: Long) {
         settings.textColorArgb = value
-        _state.update { it.copy(textColor = value) }
+        settings.textColorCustom = true
+        _state.update { it.copy(textColor = value, textColorCustom = true) }
     }
 
     fun setBgColor(value: Long) {
         settings.bgColorArgb = value
-        _state.update { it.copy(bgColor = value) }
+        settings.bgColorCustom = true
+        _state.update { it.copy(bgColor = value, bgColorCustom = true) }
+    }
+
+    // 系统是否处于夜间模式
+    private fun isSystemDark(): Boolean =
+        (getApplication<Application>().resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+
+    // 系统亮/暗切换时刷新正文默认配色（仅未手动选色时生效）
+    fun applySystemReadingColors(dark: Boolean) {
+        _state.update { s ->
+            s.copy(
+                textColor = if (s.textColorCustom) s.textColor else if (dark) DARK_TEXT_COLOR else LIGHT_TEXT_COLOR,
+                bgColor = if (s.bgColorCustom) s.bgColor else if (dark) DARK_BG_COLOR else LIGHT_BG_COLOR,
+            )
+        }
     }
 
     fun setRegex(type: Int) {
@@ -824,5 +848,14 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 c.text.length.toLong()
             )
         }
+    }
+
+    companion object {
+        // 亮色系统下的正文默认配色（米白底 + 深灰字）
+        const val LIGHT_TEXT_COLOR = 0xFF333333L
+        const val LIGHT_BG_COLOR = 0xFFFFF9F0L
+        // 暗色系统下的正文默认配色（近黑底 + 浅灰字）
+        const val DARK_TEXT_COLOR = 0xFFCCCCCCL
+        const val DARK_BG_COLOR = 0xFF1A1A1AL
     }
 }

@@ -3,6 +3,7 @@ package com.xld.txtreader.ui.reader
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -88,6 +89,12 @@ fun ReaderScreen(onBack: () -> Unit) {
         vm.load()
     }
 
+    // 系统亮/暗色切换时刷新正文默认配色（仅未手动选色时生效）
+    val systemDark = isSystemInDarkTheme()
+    LaunchedEffect(systemDark) {
+        vm.applySystemReadingColors(systemDark)
+    }
+
     DisposableEffect(Unit) {
         onDispose {
             vm.persist()
@@ -100,10 +107,14 @@ fun ReaderScreen(onBack: () -> Unit) {
     val padXPx = with(densities) { 20.dp.toPx() }
     val padYPx = with(densities) { 12.dp.toPx() }
 
+    // 阅读页统一配色：顶栏/底栏/正文共用，跟随系统暗色（未手动选色时）
+    val readingBg = Color(state.bgColor.toInt())
+    val readingText = Color(state.textColor.toInt())
+
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color(state.bgColor.toInt())),
+            .background(readingBg),
     ) {
         Column(
             Modifier
@@ -126,6 +137,8 @@ fun ReaderScreen(onBack: () -> Unit) {
                         onBack()
                     },
                     modifier = Modifier.fillMaxSize(),
+                    textColor = readingText,
+                    bgColor = readingBg,
                 )
             }
 
@@ -201,6 +214,8 @@ fun ReaderScreen(onBack: () -> Unit) {
                     onSearch = { activeSheet = SheetKind.SEARCH },
                     onSettings = { activeSheet = SheetKind.SETTINGS },
                     modifier = Modifier.fillMaxSize(),
+                    textColor = readingText,
+                    bgColor = readingBg,
                 )
             }
         }
@@ -271,24 +286,35 @@ private fun ReaderTopBar(
     fileName: String,
     progress: String,
     onBack: () -> Unit,
+    textColor: Color,
+    bgColor: Color,
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
+            .background(bgColor)
             .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onBack) {
-            Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "返回")
+            Icon(
+                painterResource(R.drawable.ic_arrow_back),
+                contentDescription = "返回",
+                tint = textColor,
+            )
         }
         Column(Modifier.weight(1f)) {
-            Text(fileName, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+            Text(
+                fileName,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                color = textColor,
+            )
             if (progress.isNotEmpty()) {
                 Text(
                     progress,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = textColor.copy(alpha = 0.6f),
                 )
             }
         }
@@ -301,19 +327,21 @@ private fun ReaderTabBar(
     onTts: () -> Unit,
     onSearch: () -> Unit,
     onSettings: () -> Unit,
+    textColor: Color,
+    bgColor: Color,
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
+            .background(bgColor)
             .padding(horizontal = 8.dp),
         horizontalArrangement = Arrangement.SpaceAround,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ReaderTab(onChapter, "章节", drawableIcon = R.drawable.ic_chapters)
-        ReaderTab(onTts, "朗读", drawableIcon = R.drawable.ic_speaker)
-        ReaderTab(onSearch, "搜索", drawableIcon = R.drawable.ic_search)
-        ReaderTab(onSettings, "设置", drawableIcon = R.drawable.ic_settings)
+        ReaderTab(onChapter, "章节", drawableIcon = R.drawable.ic_chapters, iconColor = textColor)
+        ReaderTab(onTts, "朗读", drawableIcon = R.drawable.ic_speaker, iconColor = textColor)
+        ReaderTab(onSearch, "搜索", drawableIcon = R.drawable.ic_search, iconColor = textColor)
+        ReaderTab(onSettings, "设置", drawableIcon = R.drawable.ic_settings, iconColor = textColor)
     }
 }
 
@@ -322,6 +350,7 @@ private fun ReaderTab(
     onClick: () -> Unit,
     label: String,
     drawableIcon: Int? = null,
+    iconColor: Color,
 ) {
     Column(
         Modifier
@@ -334,6 +363,7 @@ private fun ReaderTab(
                 Icon(
                     painterResource(drawableIcon),
                     contentDescription = label,
+                    tint = iconColor,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -374,9 +404,10 @@ private fun ReaderPagerHost(
     ) { page ->
         val text = vm.pageTextAt(page)
         val kw = state.highlightKeyword
-        val highlighted = if (kw.isNotBlank()) highlightKeyword(text, kw) else AnnotatedString(text)
+        val dark = isSystemInDarkTheme()
+        val highlighted = if (kw.isNotBlank()) highlightKeyword(text, kw, dark) else AnnotatedString(text)
         val sentenceHighlighted = if (state.ttsHighlightIndex >= 0) {
-            highlightSentence(highlighted, state.ttsHighlightIndex, state.ttsHighlightRanges)
+            highlightSentence(highlighted, state.ttsHighlightIndex, state.ttsHighlightRanges, dark)
         } else highlighted
         Text(
             text = sentenceHighlighted,
@@ -478,14 +509,14 @@ private fun TtsSheet(
                     Icon(
                         painterResource(R.drawable.ic_pause),
                         contentDescription = "暂停",
-                        tint = Color.White,
+                        tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(32.dp)
                     )
                 } else {
                     Icon(
                         painterResource(R.drawable.ic_play),
                         contentDescription = "播放",
-                        tint = Color.White,
+                        tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(32.dp)
                     )
                 }
@@ -600,7 +631,7 @@ private fun SearchSheet(
                 ) {
                     Column {
                         Text(
-                            highlightKeyword(hit.snippet, kw),
+                            highlightKeyword(hit.snippet, kw, isSystemInDarkTheme()),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
@@ -616,9 +647,11 @@ private fun SearchSheet(
     }
 }
 
-private fun highlightKeyword(snippet: String, keyword: String): AnnotatedString {
+private fun highlightKeyword(snippet: String, keyword: String, dark: Boolean): AnnotatedString {
     val kw = keyword.trim()
     if (kw.isEmpty()) return AnnotatedString(snippet)
+    // 暗色下用半透明黄底，保证其上的浅色文字仍可读
+    val highlightBg = if (dark) Color(0x80FFE082) else Color(0xFFFFE082)
     return buildAnnotatedString {
         var from = 0
         while (true) {
@@ -628,7 +661,7 @@ private fun highlightKeyword(snippet: String, keyword: String): AnnotatedString 
                 break
             }
             append(snippet.substring(from, idx))
-            withStyle(SpanStyle(background = Color(0xFFFFE082), fontWeight = FontWeight.Bold)) {
+            withStyle(SpanStyle(background = highlightBg, fontWeight = FontWeight.Bold)) {
                 append(snippet.substring(idx, idx + kw.length))
             }
             from = idx + kw.length
@@ -639,15 +672,18 @@ private fun highlightKeyword(snippet: String, keyword: String): AnnotatedString 
 private fun highlightSentence(
     text: AnnotatedString,
     index: Int,
-    ranges: List<IntRange>
+    ranges: List<IntRange>,
+    dark: Boolean,
 ): AnnotatedString {
     if (index < 0 || ranges.size <= index) return text
     val range = ranges[index]
     if (range.start < 0 || range.endInclusive >= text.length) return text
+    // 暗色下提高蓝底不透明度，保证黑底上可见
+    val sentenceBg = if (dark) Color(0x6664B4F0) else Color(0x4464B4F0)
     return buildAnnotatedString {
         append(text)
-        withStyle(SpanStyle(background = Color(0x4464B4F0))) {
-            addStyle(SpanStyle(background = Color(0x4464B4F0)), range.start, range.endInclusive)
+        withStyle(SpanStyle(background = sentenceBg)) {
+            addStyle(SpanStyle(background = sentenceBg), range.start, range.endInclusive)
         }
     }
 }

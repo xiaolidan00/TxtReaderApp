@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- 系统暗色模式下的夜间主题：启动窗口、系统栏底色与图标明暗随之切换 -->
+    <style name="Theme.TxtReader" parent="android:Theme.Material.NoActionBar" />
+</resources>

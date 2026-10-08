@@ -22,6 +22,15 @@ class SettingsStore(context: Context) {
         get() = sp.getLong("bg_color", 0xFFFFF9F0)
         set(value) { sp.edit().putLong("bg_color", value).apply() }
 
+    // 是否由用户手动选过正文颜色（false = 跟随系统亮/暗色）
+    var textColorCustom: Boolean
+        get() = sp.getBoolean("text_color_custom", false)
+        set(value) { sp.edit().putBoolean("text_color_custom", value).apply() }
+
+    var bgColorCustom: Boolean
+        get() = sp.getBoolean("bg_color_custom", false)
+        set(value) { sp.edit().putBoolean("bg_color_custom", value).apply() }
+
     var contentWidthPx: Int
         get() = sp.getInt("content_width", 0)
         set(value) { sp.edit().putInt("content_width", value).apply() }
