@@ -359,9 +359,16 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         val total = offsets.getOrNull(offsets.size - 1) ?: return ""
         if (global < 0 || global >= total) return ""
         val ch = chapterOf(global)
-        val local = global - offsets[ch]
+        val base = offsets.getOrNull(ch) ?: return ""
+        val local = global - base
         val range = pageList.getOrNull(ch)?.getOrNull(local) ?: return ""
-        return c.chapterText(ch).substring(range)
+        // 防御：分页结果与当前章节文本可能短暂不一致（重新解析/分页窗口期），
+        // 越界时截断而非抛出 StringIndexOutOfBoundsException
+        val text = c.chapterText(ch)
+        val start = range.first.coerceIn(0, text.length)
+        val endInclusive = range.last.coerceIn(start, text.length - 1)
+        if (start >= text.length) return ""
+        return text.substring(start, endInclusive + 1)
     }
 
     fun backPage() {
@@ -795,9 +802,12 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun chapterOf(global: Int): Int {
         val c = content ?: return 0
+        if (offsets.isEmpty()) return 0
+        // 防御：内容重新解析与 offsets 重建之间可能短暂不一致，避免越界
+        val maxIndex = minOf(c.totalChapter, offsets.size - 1)
         var ch = 0
-        while (ch < c.totalChapter && offsets[ch + 1] <= global) ch++
-        return (ch).coerceAtMost(c.totalChapter - 1)
+        while (ch < maxIndex && offsets[ch + 1] <= global) ch++
+        return ch.coerceIn(0, (maxIndex - 1).coerceAtLeast(0))
     }
 
 

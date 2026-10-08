@@ -34,9 +34,11 @@ class Paginator(
             val last = (line + linesPerPage - 1).coerceAtMost(lineCount - 1)
             val start = layout.getLineStart(line)
             val end = layout.getLineEnd(last)
-            pages += if (start < end) start until end else start until end.coerceAtLeast(start + 1)
+            // start == end 仅出现在文末空行（start 可能等于 text.length），此时跳过，
+            // 避免生成越界区间（原实现 start until start+1 会超出文本长度导致 substring 崩溃）
+            if (start < end) pages += start until end
             line = last + 1
         }
-        return pages
+        return pages.ifEmpty { listOf(0 until text.length) }
     }
 }
