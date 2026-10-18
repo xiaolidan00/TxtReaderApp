@@ -469,7 +469,7 @@ private fun ChapterSheet(
         )
         return
     }
-    LazyColumn(Modifier.height(500.dp)) {
+    LazyColumn(Modifier.height(360.dp)) {
         itemsIndexed(filtered, key = { _, item -> item.first }) { _, (index, title) ->
             val display = title.ifBlank { "第${index + 1}章" }
             Row(

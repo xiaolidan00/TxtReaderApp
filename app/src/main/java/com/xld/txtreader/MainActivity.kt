@@ -191,10 +191,13 @@ class MainActivity : ComponentActivity() {
 
         val trigger by pendingBookPath.collectAsStateWithLifecycle()
         LaunchedEffect(trigger) {
-            navController.navigate("readerContent") {
-                launchSingleTop = true
-                popUpTo(navController.graph.findStartDestination().id) {
-                    saveState = false
+            // 仅在收到外部文件打开事件（trigger 递增）时跳转阅读页，正常启动停留在书架页
+            if (trigger > 0) {
+                navController.navigate("readerContent") {
+                    launchSingleTop = true
+                    popUpTo(navController.graph.findStartDestination().id) {
+                        saveState = false
+                    }
                 }
             }
         }
