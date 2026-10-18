@@ -430,13 +430,48 @@ private fun ChapterSheet(
     chapters: List<String>,
     onJump: (Int) -> Unit,
 ) {
+    // 章节目录搜索关键词（局部 UI 状态）
+    var keyword by remember { mutableStateOf("") }
+    val dark = isSystemInDarkTheme()
+
     Text(
         "章节目录",
         style = MaterialTheme.typography.titleMedium,
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
     )
-    LazyColumn(Modifier.height(360.dp)) {
-        itemsIndexed(chapters) { index, title ->
+    OutlinedTextField(
+        value = keyword,
+        onValueChange = { keyword = it },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        placeholder = { Text("搜索章节") },
+        leadingIcon = { Icon(painterResource(R.drawable.ic_search), null) },
+        trailingIcon = {
+            if (keyword.isNotEmpty()) {
+                IconButton(onClick = { keyword = "" }) {
+                    Icon(painterResource(R.drawable.ic_close), contentDescription = "清除")
+                }
+            }
+        },
+        singleLine = true,
+    )
+    // 保留原始章节索引以便过滤后仍能正确跳转
+    val indexed = chapters.mapIndexed { index, title -> index to title }
+    val filtered = if (keyword.isBlank()) indexed
+    else indexed.filter { it.second.contains(keyword.trim(), ignoreCase = true) }
+
+    if (filtered.isEmpty()) {
+        Text(
+            "无匹配章节",
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
+    LazyColumn(Modifier.height(500.dp)) {
+        itemsIndexed(filtered, key = { _, item -> item.first }) { _, (index, title) ->
+            val display = title.ifBlank { "第${index + 1}章" }
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -444,7 +479,8 @@ private fun ChapterSheet(
                     .padding(horizontal = 16.dp, vertical = 12.dp),
             ) {
                 Text(
-                    title.ifBlank { "第${index + 1}章" },
+                    text = if (keyword.isBlank()) AnnotatedString(display)
+                    else highlightKeyword(display, keyword, dark),
                     color = if (index == currentChapter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     fontWeight = if (index == currentChapter) FontWeight.Bold else FontWeight.Normal,
                 )

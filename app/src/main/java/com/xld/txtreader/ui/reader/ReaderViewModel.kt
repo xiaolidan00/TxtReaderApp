@@ -319,6 +319,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                         totalChapter = chapters.size,
                         fontSp = settings.fontSizeSp,
                         lineSpacing = settings.lineSpacingMult,
+                        ttsSpeed = settings.ttsSpeed,
                         textColorCustom = settings.textColorCustom,
                         bgColorCustom = settings.bgColorCustom,
                         textColor = if (settings.textColorCustom) settings.textColorArgb
