@@ -16,10 +16,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -35,6 +38,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -55,6 +59,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -423,6 +428,9 @@ private fun ReaderPagerHost(
     }
 }
 
+/** 章节目录每页章节数：当前章节前后 20 章 + 当前章 = 41 */
+private const val CHAPTER_PAGE_SIZE = 40
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ChapterSheet(
@@ -434,56 +442,118 @@ private fun ChapterSheet(
     var keyword by remember { mutableStateOf("") }
     val dark = isSystemInDarkTheme()
 
-    Text(
-        "章节目录",
-        style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-    )
-    OutlinedTextField(
-        value = keyword,
-        onValueChange = { keyword = it },
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        placeholder = { Text("搜索章节") },
-        leadingIcon = { Icon(painterResource(R.drawable.ic_search), null) },
-        trailingIcon = {
-            if (keyword.isNotEmpty()) {
-                IconButton(onClick = { keyword = "" }) {
-                    Icon(painterResource(R.drawable.ic_close), contentDescription = "清除")
+    // 窗口分页：不一次性渲染全书章节，每页 CHAPTER_PAGE_SIZE 条
+    val totalChapterPages = ((chapters.size - 1).coerceAtLeast(0) / CHAPTER_PAGE_SIZE) + 1
+    // 初始页定位到包含当前章节的窗口（面板每次打开重新组合，自然重置）
+    var page by remember { mutableStateOf(currentChapter / CHAPTER_PAGE_SIZE) }
+    val listState = rememberLazyListState()
+    // 打开面板或翻页后，自动滚动到当前章节所在位置
+    LaunchedEffect(page) {
+        if (keyword.isBlank() && currentChapter in chapters.indices) {
+            val pageStart = page * CHAPTER_PAGE_SIZE
+            if (currentChapter >= pageStart && currentChapter < pageStart + CHAPTER_PAGE_SIZE) {
+                listState.scrollToItem(currentChapter - pageStart)
+            }
+        }
+    }
+
+    // 跳转到指定章（输入框，1-based）
+    var jumpInput by remember { mutableStateOf("") }
+    val jumpTarget = jumpInput.trim().toIntOrNull()
+    val jumpValid = jumpTarget != null && jumpTarget in 1..chapters.size
+
+    Column(Modifier.fillMaxWidth()) {
+        OutlinedTextField(
+            value = keyword,
+            onValueChange = { keyword = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            placeholder = { Text("搜索章节") },
+            leadingIcon = { Icon(painterResource(R.drawable.ic_search), null) },
+            trailingIcon = {
+                if (keyword.isNotEmpty()) {
+                    IconButton(onClick = { keyword = "" }) {
+                        Icon(painterResource(R.drawable.ic_close), contentDescription = "清除")
+                    }
+                }
+            },
+            singleLine = true,
+        )
+
+        // 保留原始章节索引以便过滤后仍能正确跳转
+        val indexed = chapters.mapIndexed { index, title -> index to title }
+        val searching = keyword.isNotBlank()
+        val filtered = if (!searching) indexed
+        else indexed.filter { it.second.contains(keyword.trim(), ignoreCase = true) }
+
+        // 搜索时跨全书过滤；未搜索时按窗口分页渲染，仅加载当前页 CHAPTER_PAGE_SIZE 条
+        val pageStart = page * CHAPTER_PAGE_SIZE
+        val windowItems = if (searching) filtered
+        else filtered.drop(pageStart).take(CHAPTER_PAGE_SIZE)
+
+        if (filtered.isEmpty()) {
+            Text(
+                "无匹配章节",
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            LazyColumn(state = listState, modifier = Modifier.height(360.dp)) {
+                itemsIndexed(windowItems, key = { _, item -> item.first }) { _, (index, title) ->
+                    val display = title.ifBlank { "第${index + 1}章" }
+                    val isCurrent = index == currentChapter
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(
+                                if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                else Color.Transparent
+                            )
+                            .clickable { onJump(index) }
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                    ) {
+                        Text(
+                            text = if (!searching) AnnotatedString(display)
+                            else highlightKeyword(display, keyword, dark),
+                            color = if (isCurrent) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface,
+                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                        )
+                    }
                 }
             }
-        },
-        singleLine = true,
-    )
-    // 保留原始章节索引以便过滤后仍能正确跳转
-    val indexed = chapters.mapIndexed { index, title -> index to title }
-    val filtered = if (keyword.isBlank()) indexed
-    else indexed.filter { it.second.contains(keyword.trim(), ignoreCase = true) }
 
-    if (filtered.isEmpty()) {
-        Text(
-            "无匹配章节",
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        return
-    }
-    LazyColumn(Modifier.height(360.dp)) {
-        itemsIndexed(filtered, key = { _, item -> item.first }) { _, (index, title) ->
-            val display = title.ifBlank { "第${index + 1}章" }
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clickable { onJump(index) }
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-            ) {
-                Text(
-                    text = if (keyword.isBlank()) AnnotatedString(display)
-                    else highlightKeyword(display, keyword, dark),
-                    color = if (index == currentChapter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    fontWeight = if (index == currentChapter) FontWeight.Bold else FontWeight.Normal,
-                )
+            // 分页切换栏（搜索时隐藏，跨全书显示结果）
+            if (!searching) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(
+                        onClick = { page = (page - 1).coerceAtLeast(0) },
+                        enabled = page > 0,
+                    ) { Text("上一页") }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            "第 ${page + 1}/$totalChapterPages 页",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        val end = minOf(pageStart + CHAPTER_PAGE_SIZE, chapters.size)
+                        Text(
+                            "${pageStart + 1}–$end 章 / 共 ${chapters.size} 章",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    TextButton(
+                        onClick = { page = (page + 1).coerceAtMost(totalChapterPages - 1) },
+                        enabled = page < totalChapterPages - 1,
+                    ) { Text("下一页") }
+                }
             }
         }
     }
