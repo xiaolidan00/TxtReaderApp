@@ -58,6 +58,7 @@ data class ReaderUiState(
     val scrollEpoch: Int = 0,
     val pendingScroll: Int? = null,
     val searchKeyword: String = "",
+    val searchQuery: String = "",
     val searchResults: List<BookSearcher.Hit> = emptyList(),
     val searching: Boolean = false,
     val highlightKeyword: String = "",
@@ -95,6 +96,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     private var lastPageListEpoch: Int = 0
     private var loadJob: Job? = null
     private var persistJob: Job? = null
+    private var viewportJob: Job? = null
     private var ttsSentenceIndex = 0
 
     init {
@@ -136,8 +138,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                     ttsNextPage()
                 }
             }
-            // 监听 content 变化，自动更新 TTS 文本
-            viewModelScope.launch {
+            // 监听 content 变化，自动更新 TTS 文本（全文 hashCode 较重，放后台线程避免卡主线程）
+            viewModelScope.launch(Dispatchers.Default) {
                 while (true) {
                     val newHash = content?.text?.hashCode().toString()
                     if (newHash != lastContentHash) {
@@ -355,7 +357,12 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         settings.contentWidthPx = widthPx
         settings.contentHeightPx = heightPx
         settings.density = density
-        if (content != null) {
+        if (content == null) return
+        // 键盘弹出（adjustResize）会连续触发尺寸变化；全书重分页很重，
+        // 防抖后放后台执行，避免阻塞主线程导致 IME 键盘迟迟不弹出
+        viewportJob?.cancel()
+        viewportJob = viewModelScope.launch(Dispatchers.Default) {
+            delay(150)
             repaginatePreservingPosition()
         }
     }
@@ -650,15 +657,29 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         load(selectedEncode)
     }
 
+    /** 仅更新搜索输入框文本，不触发查询 */
+    fun onSearchInput(keyword: String) {
+        _state.update { it.copy(searchKeyword = keyword) }
+    }
+
+    /** 点击搜索按钮时执行全书搜索（keyword 为当前输入文本） */
     fun search(keyword: String) {
-        _state.update { it.copy(searchKeyword = keyword, searching = true, highlightKeyword = "") }
-        if (keyword.isBlank()) {
+        val query = keyword.trim()
+        _state.update {
+            it.copy(
+                searchKeyword = keyword,
+                searchQuery = query,
+                searching = true,
+                highlightKeyword = "",
+            )
+        }
+        if (query.isEmpty()) {
             _state.update { it.copy(searchResults = emptyList(), searching = false) }
             return
         }
         viewModelScope.launch(Dispatchers.Default) {
             val c = content ?: return@launch
-            val results = BookSearcher().search(c, pageList.toList(), keyword)
+            val results = BookSearcher().search(c, pageList.toList(), query)
             _state.update { it.copy(searchResults = results, searching = false) }
         }
     }

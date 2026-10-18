@@ -1,19 +1,21 @@
 package com.xld.txtreader.ui.reader
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,6 +39,7 @@ import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -108,6 +111,15 @@ fun ReaderScreen(onBack: () -> Unit) {
 
     var activeSheet by remember { mutableStateOf<SheetKind?>(null) }
 
+    // 章节/搜索/设置为左侧静态抽屉面板（无动画、无手势），朗读保持底部弹窗
+    val drawerKind = activeSheet?.takeIf {
+        it == SheetKind.CHAPTERS || it == SheetKind.SEARCH || it == SheetKind.SETTINGS
+    }
+
+    fun closeDrawer() {
+        activeSheet = null
+    }
+
     val densities = LocalDensity.current
     val padXPx = with(densities) { 20.dp.toPx() }
     val padYPx = with(densities) { 12.dp.toPx() }
@@ -116,171 +128,202 @@ fun ReaderScreen(onBack: () -> Unit) {
     val readingBg = Color(state.bgColor.toInt())
     val readingText = Color(state.textColor.toInt())
 
+    // 抽屉打开时返回键关闭抽屉而非退出阅读页
+    BackHandler(enabled = drawerKind != null) {
+        closeDrawer()
+    }
+
     Box(
         Modifier
             .fillMaxSize()
-            .background(readingBg),
+            .background(readingBg)
+            .safeDrawingPadding(),
     ) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .safeDrawingPadding()
-                .navigationBarsPadding(),
-        ) {
-            // Top bar slot
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
+            Column(
+                Modifier.fillMaxSize(),
             ) {
-                ReaderTopBar(
-                    fileName = state.fileName,
-                    progress = if (state.totalChapter > 0) "第${state.currentChapter + 1}/${state.totalChapter}章" else "",
-                    onBack = {
-                        vm.persist()
-                        vm.backPage()
-                        onBack()
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                    textColor = readingText,
-                    bgColor = readingBg,
-                )
-            }
+                // Top bar slot
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                ) {
+                    ReaderTopBar(
+                        fileName = state.fileName,
+                        progress = if (state.totalChapter > 0) "第${state.currentChapter + 1}/${state.totalChapter}章" else "",
+                        onBack = {
+                            vm.persist()
+                            vm.backPage()
+                            onBack()
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                        textColor = readingText,
+                        bgColor = readingBg,
+                    )
+                }
 
-            // Reading content
-            Box(
-                Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .onSizeChanged { size ->
-                        vm.setViewport(
-                            size.width - (2 * padXPx).toInt(),
-                            size.height - (2 * padYPx).toInt(),
-                            densities.density
-                        )
-                    },
-            ) {
-                when {
-                    state.loadError -> {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.padding(32.dp)
-                            ) {
-                                Text(
-                                    state.loadErrorMessage.ifBlank { "加载失败" },
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                                if (state.loadErrorMessage.contains("编码")) {
+                // Reading content
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .onSizeChanged { size ->
+                            vm.setViewport(
+                                size.width - (2 * padXPx).toInt(),
+                                size.height - (2 * padYPx).toInt(),
+                                densities.density
+                            )
+                        },
+                ) {
+                    when {
+                        state.loadError -> {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.padding(32.dp)
+                                ) {
                                     Text(
-                                        "请返回后在设置中切换编码方式",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(top = 8.dp),
+                                        state.loadErrorMessage.ifBlank { "加载失败" },
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.error,
                                     )
+                                    if (state.loadErrorMessage.contains("编码")) {
+                                        Text(
+                                            "请返回后在设置中切换编码方式",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(top = 8.dp),
+                                        )
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    state.totalPages == 0 -> {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("该书为空")
+                        state.totalPages == 0 -> {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("该书为空")
+                            }
+                        }
+
+                        else -> {
+                            ReaderPagerHost(
+                                vm = vm,
+                                state = state,
+                                modifier = Modifier.fillMaxSize(),
+                            )
                         }
                     }
+                }
 
-                    else -> {
-                        ReaderPagerHost(
-                            vm = vm,
-                            state = state,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
+                // Bottom bar slot
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                ) {
+                    ReaderTabBar(
+                        onChapter = { activeSheet = SheetKind.CHAPTERS },
+                        onTts = {
+                            if (activeSheet == SheetKind.TTS) {
+                                activeSheet = null
+                            } else {
+                                activeSheet = SheetKind.TTS
+                            }
+                        },
+                        onSearch = { activeSheet = SheetKind.SEARCH },
+                        onSettings = { activeSheet = SheetKind.SETTINGS },
+                        modifier = Modifier.fillMaxSize(),
+                        textColor = readingText,
+                        bgColor = readingBg,
+                    )
                 }
             }
 
-            // Bottom bar slot
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-                    .navigationBarsPadding()
-            ) {
-                ReaderTabBar(
-                    onChapter = { activeSheet = SheetKind.CHAPTERS },
-                    onTts = {
-                        if (activeSheet == SheetKind.TTS) {
-                            activeSheet = null
-                        } else {
-                            activeSheet = SheetKind.TTS
-                        }
-                    },
-                    onSearch = { activeSheet = SheetKind.SEARCH },
-                    onSettings = { activeSheet = SheetKind.SETTINGS },
-                    modifier = Modifier.fillMaxSize(),
-                    textColor = readingText,
-                    bgColor = readingBg,
+            if (state.loading) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color(0x80000000)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+
+            // 静态左侧抽屉：无动画、无手势；点击面板外空白处（遮罩）关闭
+            if (drawerKind != null) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color(0x80000000))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { closeDrawer() },
+                        ),
                 )
+                Surface(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(360.dp),
+                    color = readingBg,
+                    contentColor = readingText,
+                    shadowElevation = 8.dp,
+                ) {
+                    when (drawerKind) {
+                        SheetKind.CHAPTERS -> ChapterSheet(
+                            currentChapter = state.currentChapter,
+                            chapters = state.chapters,
+                            onJump = { chapter -> vm.jumpChapter(chapter); closeDrawer() },
+                            onClose = { closeDrawer() },
+                        )
+
+                        SheetKind.SEARCH -> SearchSheet(
+                            state = state,
+                            onInput = vm::onSearchInput,
+                            onSearch = vm::search,
+                            onJump = { hit -> vm.jumpToHit(hit, state.searchQuery); closeDrawer() },
+                            onClose = { closeDrawer() },
+                        )
+
+                        SheetKind.SETTINGS -> SettingsSheet(
+                            state = state,
+                            onFont = vm::setFont,
+                            onLineSpacing = vm::setLineSpacing,
+                            onTextColor = vm::setTextColor,
+                            onBgColor = vm::setBgColor,
+                            onRegex = vm::setRegex,
+                            onRegexCustom = vm::setRegexCustom,
+                            onEncode = vm::setEncode,
+                            onClose = { closeDrawer() },
+                        )
+
+                        else -> {}
+                    }
+                }
             }
         }
 
-        if (state.loading) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(Color(0x80000000)),
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator()
-            }
-        }
-    }
-
-    activeSheet?.let { sheet ->
+    // 朗读面板保持底部弹窗
+    if (activeSheet == SheetKind.TTS) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(onDismissRequest = { activeSheet = null }, sheetState = sheetState) {
-            when (sheet) {
-                SheetKind.CHAPTERS -> ChapterSheet(
-                    currentChapter = state.currentChapter,
-                    chapters = state.chapters,
-                    onJump = { chapter -> vm.jumpChapter(chapter); activeSheet = null },
-                )
-
-                SheetKind.TTS -> TtsSheet(
-                    playing = state.ttsPlaying,
-                    available = state.ttsAvailable,
-                    chapterTitle = state.ttsChapterTitle,
-                    progressText = state.ttsProgressText,
-                    speed = state.ttsSpeed,
-                    fileName = state.fileName,
-                    onTogglePlay = {
-                        vm.ttsToggle()
-                    },
-                    onPrevPage = vm::ttsPrevPage,
-                    onNextPage = vm::ttsNextPage,
-                    onPrevChapter = vm::ttsPrevChapter,
-                    onNextChapter = vm::ttsNextChapter,
-                    onSpeed = vm::ttsSpeed,
-                )
-
-                SheetKind.SEARCH -> SearchSheet(
-                    state = state,
-                    onSearch = vm::search,
-                    onJump = { hit -> vm.jumpToHit(hit, state.searchKeyword); activeSheet = null },
-                )
-
-                SheetKind.SETTINGS -> SettingsSheet(
-                    state = state,
-                    onFont = vm::setFont,
-                    onLineSpacing = vm::setLineSpacing,
-                    onTextColor = vm::setTextColor,
-                    onBgColor = vm::setBgColor,
-                    onRegex = vm::setRegex,
-                    onRegexCustom = vm::setRegexCustom,
-                    onEncode = vm::setEncode,
-                )
-            }
+            TtsSheet(
+                playing = state.ttsPlaying,
+                available = state.ttsAvailable,
+                chapterTitle = state.ttsChapterTitle,
+                progressText = state.ttsProgressText,
+                speed = state.ttsSpeed,
+                fileName = state.fileName,
+                onTogglePlay = {
+                    vm.ttsToggle()
+                },
+                onPrevPage = vm::ttsPrevPage,
+                onNextPage = vm::ttsNextPage,
+                onPrevChapter = vm::ttsPrevChapter,
+                onNextChapter = vm::ttsNextChapter,
+                onSpeed = vm::ttsSpeed,
+            )
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -428,8 +471,25 @@ private fun ReaderPagerHost(
     }
 }
 
-/** 章节目录每页章节数：当前章节前后 20 章 + 当前章 = 41 */
+/** 章节目录每页章节数：当前章节前后 20 章 + 当前章 = 40 */
 private const val CHAPTER_PAGE_SIZE = 40
+
+/** 抽屉面板通用标题栏：标题 + 关闭按钮 */
+@Composable
+private fun DrawerHeader(title: String, onClose: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            )
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -437,9 +497,11 @@ private fun ChapterSheet(
     currentChapter: Int,
     chapters: List<String>,
     onJump: (Int) -> Unit,
+    onClose: () -> Unit,
 ) {
-    // 章节目录搜索关键词（局部 UI 状态）
+    // 章节目录搜索：keyword 为输入框文本，appliedKeyword 为点击搜索按钮后已提交的关键词（用于过滤）
     var keyword by remember { mutableStateOf("") }
+    var appliedKeyword by remember { mutableStateOf("") }
     val dark = isSystemInDarkTheme()
 
     // 窗口分页：不一次性渲染全书章节，每页 CHAPTER_PAGE_SIZE 条
@@ -449,7 +511,7 @@ private fun ChapterSheet(
     val listState = rememberLazyListState()
     // 打开面板或翻页后，自动滚动到当前章节所在位置
     LaunchedEffect(page) {
-        if (keyword.isBlank() && currentChapter in chapters.indices) {
+        if (appliedKeyword.isBlank() && currentChapter in chapters.indices) {
             val pageStart = page * CHAPTER_PAGE_SIZE
             if (currentChapter >= pageStart && currentChapter < pageStart + CHAPTER_PAGE_SIZE) {
                 listState.scrollToItem(currentChapter - pageStart)
@@ -462,30 +524,43 @@ private fun ChapterSheet(
     val jumpTarget = jumpInput.trim().toIntOrNull()
     val jumpValid = jumpTarget != null && jumpTarget in 1..chapters.size
 
-    Column(Modifier.fillMaxWidth()) {
+    Column(Modifier.fillMaxHeight()) {
+        DrawerHeader(title = "章节目录", onClose = onClose)
         OutlinedTextField(
             value = keyword,
-            onValueChange = { keyword = it },
+            onValueChange = {
+                keyword = it
+                // 输入清空时立即恢复完整目录
+                if (it.isBlank()) appliedKeyword = ""
+            },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+                .padding(horizontal =8.dp),
             placeholder = { Text("搜索章节") },
             leadingIcon = { Icon(painterResource(R.drawable.ic_search), null) },
             trailingIcon = {
                 if (keyword.isNotEmpty()) {
-                    IconButton(onClick = { keyword = "" }) {
-                        Icon(painterResource(R.drawable.ic_close), contentDescription = "清除")
+                    Row {
+                        // 搜索按钮：点击后才执行过滤
+                        IconButton(onClick = { appliedKeyword = keyword.trim() }) {
+                            Icon(painterResource(R.drawable.ic_search), contentDescription = "搜索")
+                        }
+                        IconButton(onClick = { keyword = ""; appliedKeyword = "" }) {
+                            Icon(painterResource(R.drawable.ic_close), contentDescription = "清除")
+                        }
                     }
                 }
             },
             singleLine = true,
         )
 
-        // 保留原始章节索引以便过滤后仍能正确跳转
-        val indexed = chapters.mapIndexed { index, title -> index to title }
-        val searching = keyword.isNotBlank()
-        val filtered = if (!searching) indexed
-        else indexed.filter { it.second.contains(keyword.trim(), ignoreCase = true) }
+        // 保留原始章节索引以便过滤后仍能正确跳转（缓存，避免每次重组全量重建列表）
+        val indexed = remember(chapters) { chapters.mapIndexed { index, title -> index to title } }
+        val searching = appliedKeyword.isNotBlank()
+        val filtered = remember(indexed, searching, appliedKeyword) {
+            if (!searching) indexed
+            else indexed.filter { it.second.contains(appliedKeyword, ignoreCase = true) }
+        }
 
         // 搜索时跨全书过滤；未搜索时按窗口分页渲染，仅加载当前页 CHAPTER_PAGE_SIZE 条
         val pageStart = page * CHAPTER_PAGE_SIZE
@@ -499,7 +574,7 @@ private fun ChapterSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            LazyColumn(state = listState, modifier = Modifier.height(360.dp)) {
+            LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().weight(1f)) {
                 itemsIndexed(windowItems, key = { _, item -> item.first }) { _, (index, title) ->
                     val display = title.ifBlank { "第${index + 1}章" }
                     val isCurrent = index == currentChapter
@@ -515,7 +590,7 @@ private fun ChapterSheet(
                     ) {
                         Text(
                             text = if (!searching) AnnotatedString(display)
-                            else highlightKeyword(display, keyword, dark),
+                            else highlightKeyword(display, appliedKeyword, dark),
                             color = if (isCurrent) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurface,
                             fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
@@ -697,55 +772,62 @@ private fun ControlButton(
 @Composable
 private fun SearchSheet(
     state: ReaderUiState,
+    onInput: (String) -> Unit,
     onSearch: (String) -> Unit,
     onJump: (BookSearcher.Hit) -> Unit,
+    onClose: () -> Unit,
 ) {
-    Text(
-        "搜索内容",
-        style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.padding(horizontal = 16.dp)
-    )
-    OutlinedTextField(
-        value = state.searchKeyword,
-        onValueChange = onSearch,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        placeholder = { Text("输入关键词搜索全书") },
-        leadingIcon = { Icon(painterResource(R.drawable.ic_search), null) },
-        singleLine = true,
-    )
-    if (state.searching) {
-        Box(
-            Modifier
+    Column(Modifier.fillMaxHeight()) {
+        DrawerHeader(title = "全文搜索", onClose = onClose)
+        OutlinedTextField(
+            value = state.searchKeyword,
+            onValueChange = onInput,
+            modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp), contentAlignment = Alignment.Center
-        ) {
-            CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.dp)
-        }
-    } else if (state.searchResults.isEmpty() && state.searchKeyword.isNotBlank()) {
-        Text("没有找到相关内容", modifier = Modifier.padding(horizontal = 16.dp))
-    } else {
-        LazyColumn(Modifier.height(300.dp)) {
-            itemsIndexed(state.searchResults) { _, hit ->
-                val kw = state.searchKeyword
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { onJump(hit) }
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                ) {
-                    Column {
-                        Text(
-                            highlightKeyword(hit.snippet, kw, isSystemInDarkTheme()),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Text(
-                            "第${hit.chapter + 1}章 · 第${hit.pageInChapter + 1}页",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
+                .padding(horizontal = 16.dp),
+            placeholder = { Text("输入关键词搜索全书") },
+            leadingIcon = { Icon(painterResource(R.drawable.ic_search), null) },
+            trailingIcon = {
+                // 搜索按钮：点击后才执行查询
+                IconButton(onClick = { onSearch(state.searchKeyword) }) {
+                    Icon(painterResource(R.drawable.ic_search), contentDescription = "搜索")
+                }
+            },
+            singleLine = true,
+        )
+        if (state.searching) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(16.dp), contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.dp)
+            }
+        } else if (state.searchResults.isEmpty() && state.searchQuery.isNotBlank()) {
+            Text("没有找到相关内容", modifier = Modifier.padding(horizontal = 16.dp))
+        } else {
+            LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
+                itemsIndexed(state.searchResults) { _, hit ->
+                    val kw = state.searchQuery
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onJump(hit) }
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                    ) {
+                        Column {
+                            Text(
+                                highlightKeyword(hit.snippet, kw, isSystemInDarkTheme()),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                "第${hit.chapter + 1}章 · 第${hit.pageInChapter + 1}页",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
                     }
                 }
             }
@@ -822,17 +904,19 @@ private fun SettingsSheet(
     onRegex: (Int) -> Unit,
     onRegexCustom: (String) -> Unit,
     onEncode: (String) -> Unit,
+    onClose: () -> Unit,
 ) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp),
-    ) {
-        Text("阅读设置", style = MaterialTheme.typography.titleMedium)
-
-        Text(
-            "字体大小",
+    Column(Modifier.fillMaxHeight()) {
+        DrawerHeader(title = "阅读设置", onClose = onClose)
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp),
+        ) {
+            Text(
+                "字体大小",
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(top = 12.dp)
         )
@@ -970,6 +1054,7 @@ private fun SettingsSheet(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp)
         )
+        }
     }
 }
 
