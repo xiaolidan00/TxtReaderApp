@@ -47,7 +47,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setIntent(intent)
         openedByViewIntent = intent?.action == Intent.ACTION_VIEW
-//        enableEdgeToEdge()
+        enableEdgeToEdge()
         setContent {
             TxtReaderTheme {
                 MainNav()
