@@ -111,15 +111,8 @@ class TtsService : Service() {
                         .setUsage(AudioAttributes.USAGE_MEDIA)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                         .build()
-                )
-                val fallback =
-                    listOf(Locale.CHINA, Locale.SIMPLIFIED_CHINESE, Locale.CHINESE, Locale.ENGLISH)
-                val available = tts.availableLanguages
-                Log.d("TtsService", "availableLanguages=$available")
-                val chosen =
-                    fallback.firstOrNull { locale -> available?.any { it.language == locale.language && it.country == locale.country } == true }
-                        ?: fallback.firstOrNull { locale -> available?.any { it.language == locale.language } == true }
-                        ?: Locale.getDefault()
+                )               
+                val chosen =Locale.getDefault()
                 tts.language = chosen
                 Log.d("TtsService", "language=$chosen")
                 tts.setSpeechRate(appSettings.ttsSpeed)

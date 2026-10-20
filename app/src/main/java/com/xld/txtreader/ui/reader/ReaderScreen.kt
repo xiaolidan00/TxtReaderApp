@@ -893,13 +893,16 @@ private fun highlightSentence(
 ): AnnotatedString {
     if (index < 0 || ranges.size <= index) return text
     val range = ranges[index]
-    if (range.start < 0 || range.endInclusive >= text.length) return text
+    // 分句范围按 [start, end) 记录：无标点结尾的末句 end 正好等于文本长度，不能因此跳过高亮
+    val start = range.start.coerceIn(0, text.length)
+    val end = range.endInclusive.coerceIn(start, text.length)
+    if (start >= end) return text
     // 暗色下提高蓝底不透明度，保证黑底上可见
     val sentenceBg = if (dark) Color(0x6664B4F0) else Color(0x4464B4F0)
     return buildAnnotatedString {
         append(text)
         withStyle(SpanStyle(background = sentenceBg)) {
-            addStyle(SpanStyle(background = sentenceBg), range.start, range.endInclusive)
+            addStyle(SpanStyle(background = sentenceBg), start, end)
         }
     }
 }
