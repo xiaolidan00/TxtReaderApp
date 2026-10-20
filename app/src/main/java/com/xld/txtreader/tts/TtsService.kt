@@ -16,12 +16,19 @@ import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.support.v4.media.MediaMetadataCompat
+import android.support.v4.media.session.MediaSessionCompat
+import android.support.v4.media.session.PlaybackStateCompat
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.media.app.NotificationCompat.MediaStyle
+import com.xld.txtreader.MainActivity
 import com.xld.txtreader.R
 import com.xld.txtreader.TxtReaderApplication
 import com.xld.txtreader.appSettings
@@ -29,10 +36,13 @@ import com.xld.txtreader.core.Sentence
 import com.xld.txtreader.core.SentenceSegmenter
 import com.xld.txtreader.eventEmitter
 import com.xld.txtreader.EVENT_TTS_DONE
-import com.xld.txtreader.EVENT_TTS_START
+import com.xld.txtreader.EVENT_TTS_NEXT_CHAPTER
+import com.xld.txtreader.EVENT_TTS_PAUSED
+import com.xld.txtreader.EVENT_TTS_PREV_CHAPTER
 import com.xld.txtreader.EVENT_TTS_READY
-import com.xld.txtreader.EVENT_TTS_STOPPED
 import com.xld.txtreader.EVENT_TTS_SENTENCE_START
+import com.xld.txtreader.EVENT_TTS_START
+import com.xld.txtreader.EVENT_TTS_STOPPED
 import java.util.Locale
 
 class TtsService : Service() {
@@ -46,8 +56,14 @@ class TtsService : Service() {
     private var currentText: String? = null
     var isSpeaking = false
     private var pendingStop = false
+    private var paused = false
     private var sentenceList: List<Sentence> = emptyList()
     private var sentenceIndex = 0
+    private lateinit var mediaSession: MediaSessionCompat
+    private var bookTitle = ""
+    private var chapterNumber = 0
+    private var totalChapters = 0
+    private var filePath: String? = null
 
     private val noisyReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -87,7 +103,7 @@ class TtsService : Service() {
         private const val REQUEST_PREV = 100
         private const val REQUEST_TOGGLE = 101
         private const val REQUEST_NEXT = 102
-        private const val REQUEST_STOP = 103
+        private const val REQUEST_OPEN = 103
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -95,11 +111,13 @@ class TtsService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        initMediaSession()
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             stopSelf()
             return
         }
         startForeground(NOTIFICATION_ID, buildNotification(false))
+        updatePlaybackState(false)
         audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
         registerDeviceMonitoring()
         val initListener = TextToSpeech.OnInitListener { status ->
@@ -163,8 +181,14 @@ class TtsService : Service() {
         Log.d("TtsService", "onStartCommand action=${intent?.action}")
         when (intent?.action) {
             TtsController.ACTION_PLAY -> {
-                val text = intent.getStringExtra("extra_text")
-                val startIndex = intent.getIntExtra("extra_sentence_index", 0)
+                val text = intent.getStringExtra(TtsController.EXTRA_TEXT)
+                val startIndex = intent.getIntExtra(TtsController.EXTRA_SENTENCE_INDEX, 0)
+                intent.getStringExtra(TtsController.EXTRA_BOOK_TITLE)?.let { bookTitle = it }
+                intent.getIntExtra(TtsController.EXTRA_CHAPTER_NUMBER, chapterNumber)
+                    .takeIf { it > 0 }?.let { chapterNumber = it }
+                intent.getIntExtra(TtsController.EXTRA_TOTAL_CHAPTERS, totalChapters)
+                    .takeIf { it > 0 }?.let { totalChapters = it }
+                intent.getStringExtra(TtsController.EXTRA_FILE_PATH)?.let { filePath = it }
                 if (text != null) {
                     pendingStop = false
                     currentText = text
@@ -174,6 +198,7 @@ class TtsService : Service() {
                     } else {
                         pendingText = text
                     }
+                    updateNotification(isSpeaking)
                 }
             }
 
@@ -181,8 +206,7 @@ class TtsService : Service() {
                 if (isSpeaking) {
                     pause()
                 } else {
-                    val text = currentText
-                    if (text != null) speakPage(text, sentenceIndex)
+                    resumePlayback()
                 }
             }
 
@@ -193,26 +217,39 @@ class TtsService : Service() {
             TtsController.ACTION_NEXT_PAGE -> { /* 不再停止，保留 currentText 供自动续读 */
             }
 
-            TtsController.ACTION_PREV_CHAPTER -> { /* 不再停止，保留 currentText 供自动续读 */
+            TtsController.ACTION_PREV_CHAPTER -> {
+                eventEmitter.emit(EVENT_TTS_PREV_CHAPTER)
             }
 
-            TtsController.ACTION_NEXT_CHAPTER -> { /* 不再停止，保留 currentText 供自动续读 */
+            TtsController.ACTION_NEXT_CHAPTER -> {
+                eventEmitter.emit(EVENT_TTS_NEXT_CHAPTER)
             }
 
             TtsController.ACTION_SPEED -> {
-                val speed = intent.getFloatExtra("extra_speed", appSettings.ttsSpeed)
+                val speed = intent.getFloatExtra(TtsController.EXTRA_SPEED, appSettings.ttsSpeed)
                 appSettings.ttsSpeed = speed
                 if (ready) runCatching { tts.setSpeechRate(speed) }
             }
 
             TtsController.ACTION_STOP -> stopService()
         }
-        return START_STICKY
+        return START_NOT_STICKY
+    }
+
+    private fun resumePlayback() {
+        val text = currentText ?: return
+        if (!ready) {
+            pendingText = text
+            pendingSentenceIndex = sentenceIndex
+            return
+        }
+        speakPage(text, sentenceIndex)
     }
 
     private fun speakPage(text: String?, startIndex: Int = 0) {
         if (text.isNullOrBlank()) return
         pendingStop = false
+        paused = false
         if (!wakeLock.isHeld) runCatching { wakeLock.acquire() }
         sentenceList = SentenceSegmenter.split(text)
         sentenceIndex = startIndex
@@ -238,9 +275,8 @@ class TtsService : Service() {
     }
 
     private fun onUtteranceDone() {
-        if (pendingStop) {
+        if (pendingStop || paused) {
             pendingStop = false
-            eventEmitter.emit(EVENT_TTS_DONE)
             return
         }
         if (sentenceIndex < sentenceList.size) {
@@ -260,19 +296,23 @@ class TtsService : Service() {
     }
 
     private fun pause() {
+        paused = true
+        if (isSpeaking && sentenceIndex > 0) sentenceIndex--
         isSpeaking = false
         pendingStop = true
         runCatching { tts.stop() }
         if (wakeLock.isHeld) wakeLock.release()
+        eventEmitter.emit(EVENT_TTS_PAUSED)
         updateNotification(false)
-        stopSelf()
     }
 
     private fun stopService() {
+        paused = false
         isSpeaking = false
         pendingStop = true
         runCatching { tts.stop() }
         if (wakeLock.isHeld) wakeLock.release()
+        eventEmitter.emit(EVENT_TTS_STOPPED)
         updateNotification(false)
         stopSelf()
     }
@@ -291,12 +331,7 @@ class TtsService : Service() {
     private fun onAudioDeviceLost() {
         Log.d("TtsService", "audio device lost, stopping playback")
         if (!isSpeaking) return
-        isSpeaking = false
-        pendingStop = true
-        runCatching { tts.stop() }
-        eventEmitter.emit(EVENT_TTS_STOPPED)
-        updateNotification(false)
-        stopSelf()
+        stopService()
     }
 
     private fun isExternalOutputDevice(type: Int): Boolean = when (type) {
@@ -313,6 +348,29 @@ class TtsService : Service() {
         else -> false
     }
 
+    private fun initMediaSession() {
+        mediaSession = MediaSessionCompat(this, "TtsService").apply {
+            setCallback(object : MediaSessionCompat.Callback() {
+                override fun onPlay() {
+                    if (!isSpeaking) resumePlayback()
+                }
+
+                override fun onPause() {
+                    pause()
+                }
+
+                override fun onSkipToNext() {
+                    eventEmitter.emit(EVENT_TTS_NEXT_CHAPTER)
+                }
+
+                override fun onSkipToPrevious() {
+                    eventEmitter.emit(EVENT_TTS_PREV_CHAPTER)
+                }
+            }, Handler(Looper.getMainLooper()))
+            isActive = true
+        }
+    }
+
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -327,15 +385,21 @@ class TtsService : Service() {
         }
     }
 
+    private fun chapterProgressText(): String =
+        if (totalChapters > 0) "第 $chapterNumber 章 / 共 $totalChapters 章" else "正在准备朗读"
+
     private fun buildNotification(playing: Boolean): Notification {
         val prevIntent =
-            Intent(this, TtsService::class.java).apply { action = TtsController.ACTION_PREV_PAGE }
+            Intent(this, TtsService::class.java).apply { action = TtsController.ACTION_PREV_CHAPTER }
         val toggleIntent =
             Intent(this, TtsService::class.java).apply { action = TtsController.ACTION_TOGGLE }
         val nextIntent =
-            Intent(this, TtsService::class.java).apply { action = TtsController.ACTION_NEXT_PAGE }
-        val stopIntent =
-            Intent(this, TtsService::class.java).apply { action = TtsController.ACTION_STOP }
+            Intent(this, TtsService::class.java).apply { action = TtsController.ACTION_NEXT_CHAPTER }
+        val openIntent = Intent(this, MainActivity::class.java).apply {
+            action = MainActivity.ACTION_OPEN_READER
+            filePath?.let { putExtra(MainActivity.EXTRA_FILE_PATH, it) }
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
 
         val prevPendingIntent = PendingIntent.getService(
             this,
@@ -355,32 +419,64 @@ class TtsService : Service() {
             nextIntent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-        val stopPendingIntent = PendingIntent.getService(
+        val openPendingIntent = PendingIntent.getActivity(
             this,
-            REQUEST_STOP,
-            stopIntent,
+            REQUEST_OPEN,
+            openIntent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
+        mediaSession.setSessionActivity(openPendingIntent)
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("TxtReader")
-            .setContentText(if (playing) "正在朗读" else "朗读已暂停")
+            .setContentTitle(bookTitle.ifBlank { getString(R.string.app_name) })
+            .setContentText(chapterProgressText())
+            .setContentIntent(openPendingIntent)
             .setSmallIcon(R.drawable.ic_speaker)
             .setOngoing(true)
             .setAutoCancel(false)
             .setOnlyAlertOnce(true)
-            .addAction(R.drawable.ic_skip_prev, "上一页", prevPendingIntent)
+            .setShowWhen(false)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .addAction(R.drawable.ic_skip_prev, "上一章", prevPendingIntent)
             .addAction(
                 if (playing) R.drawable.ic_pause else R.drawable.ic_play,
                 if (playing) "暂停" else "播放",
                 togglePendingIntent
             )
-            .addAction(R.drawable.ic_skip_next, "下一页", nextPendingIntent)
-            .addAction(R.drawable.ic_close, "停止", stopPendingIntent)
+            .addAction(R.drawable.ic_skip_next, "下一章", nextPendingIntent)
+            .setStyle(
+                MediaStyle()
+                    .setMediaSession(mediaSession.sessionToken)
+                    .setShowActionsInCompactView(0, 1, 2)
+            )
             .build()
     }
 
+    private fun updatePlaybackState(playing: Boolean) {
+        val state = if (playing) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
+        mediaSession.setPlaybackState(
+            PlaybackStateCompat.Builder()
+                .setActions(
+                    PlaybackStateCompat.ACTION_PLAY or
+                        PlaybackStateCompat.ACTION_PAUSE or
+                        PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                        PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                        PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                        PlaybackStateCompat.ACTION_STOP
+                )
+                .setState(state, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 1f)
+                .build()
+        )
+        mediaSession.setMetadata(
+            MediaMetadataCompat.Builder()
+                .putString(MediaMetadataCompat.METADATA_KEY_TITLE, bookTitle.ifBlank { getString(R.string.app_name) })
+                .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, chapterProgressText())
+                .build()
+        )
+    }
+
     private fun updateNotification(playing: Boolean) {
+        updatePlaybackState(playing)
         notificationManager.notify(NOTIFICATION_ID, buildNotification(playing))
     }
 
@@ -388,9 +484,17 @@ class TtsService : Service() {
         stopForeground(2) // STOP_FOREGROUND_REMOVE
         ready = false
         pendingStop = true
-        if (wakeLock.isHeld) wakeLock.release()
+        if (::wakeLock.isInitialized && wakeLock.isHeld) wakeLock.release()
         runCatching { unregisterReceiver(noisyReceiver) }
-        runCatching { audioManager.unregisterAudioDeviceCallback(audioDeviceCallback) }
-        runCatching { tts.shutdown() }
+        if (::audioManager.isInitialized) {
+            runCatching { audioManager.unregisterAudioDeviceCallback(audioDeviceCallback) }
+        }
+        if (::tts.isInitialized) runCatching { tts.shutdown() }
+        if (::mediaSession.isInitialized) {
+            runCatching {
+                mediaSession.isActive = false
+                mediaSession.release()
+            }
+        }
     }
 }

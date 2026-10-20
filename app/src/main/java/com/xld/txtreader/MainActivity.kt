@@ -54,6 +54,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         handleOpenIntent(intent)
+        handleReaderIntent(intent)
         requestStoragePermissionIfNeeded()
         requestBluetoothPermissionIfNeeded()
         requestNotificationPermissionIfNeeded()
@@ -64,6 +65,16 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         openedByViewIntent = intent?.action == Intent.ACTION_VIEW
         handleOpenIntent(intent)
+        handleReaderIntent(intent)
+    }
+
+    /** 点击 TTS 媒体通知栏回到阅读页 */
+    private fun handleReaderIntent(intent: Intent?) {
+        if (intent?.action != ACTION_OPEN_READER) return
+        val path = intent.getStringExtra(EXTRA_FILE_PATH) ?: OpenBookStore.filePath ?: return
+        // 同一本书只回到前台，不触发 OpenBookStore 的文件切换事件，避免阅读页重新加载并重置朗读进度
+        if (OpenBookStore.filePath != path) OpenBookStore.open(path)
+        pendingBookPath.value = pendingBookPath.value + 1
     }
 
     private fun requestStoragePermissionIfNeeded() {
@@ -191,8 +202,11 @@ class MainActivity : ComponentActivity() {
 
         val trigger by pendingBookPath.collectAsStateWithLifecycle()
         LaunchedEffect(trigger) {
-            // 仅在收到外部文件打开事件（trigger 递增）时跳转阅读页，正常启动停留在书架页
-            if (trigger > 0) {
+            // 仅在收到外部文件/通知栏打开事件（trigger 递增）时跳转阅读页，正常启动停留在书架页；
+            // 已在阅读页时只回到前台，避免重建 ReaderViewModel 中断朗读。
+            val alreadyInReader =
+                navController.currentBackStackEntry?.destination?.route == "readerContent"
+            if (trigger > 0 && !alreadyInReader) {
                 navController.navigate("readerContent") {
                     launchSingleTop = true
                     popUpTo(navController.graph.findStartDestination().id) {
@@ -215,5 +229,10 @@ class MainActivity : ComponentActivity() {
                 ReaderScreen(onBack = { navController.popBackStack() })
             }
         }
+    }
+
+    companion object {
+        const val ACTION_OPEN_READER = "com.xld.txtreader.OPEN_READER"
+        const val EXTRA_FILE_PATH = "extra_file_path"
     }
 }

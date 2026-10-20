@@ -47,6 +47,7 @@ android-studio中有JDK 21,地址在`D:\softwares\android-studio\jbr\bin`
 | Room                            | 2.8.4        |
 | Navigation Compose              | 2.9.8        |
 | Lifecycle                       | 2.8.7        |
+| androidx.media                  | 1.7.0        |
 | compileSdk / minSdk / targetSdk | 36           |
 | Java                            | 11           |
 
@@ -193,6 +194,10 @@ Room 编译器使用 KSP（非 kapt）。实体 `BookRecord` 使用 `@Upsert` �
 - `EVENT_TTS_DONE` 由 TtsService 在 `onUtteranceDone()` 时发出，ReaderViewModel 收到后自动翻到下一页并朗读新文本
 - 停止/暂停朗读（`stopTts`/`ttsToggle`/`backPage`/`EVENT_TTS_STOPPED`）以及翻页、章节跳转、进度跳转时，均清除朗读句子高亮（`ttsHighlightIndex=-1`、`ttsHighlightRanges` 置空），避免残留高亮
 - TtsService 不进行分页/内容加载，仅朗读当前页面文本
-- 通知栏使用 `CATEGORY_TRANSPORT` + `FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK` 媒体播放通知
-- TtsService 通过 `onStartCommand` 接收 PendingIntent 通知栏按钮指令，转换为 `startService` 调用
+- 通知栏使用 `MediaSessionCompat` + `NotificationCompat.MediaStyle` 媒体通知：标题为 txt 文件名，正文为“第 N 章 / 共 M 章”，按钮为上一章、播放/暂停、下一章
+- `TtsController.play()` 通过 Intent extras 传递书名、章节序号、总章节数、文件路径；TtsService 据此刷新 MediaSession 元数据和通知
+- 通知栏播放/暂停由 TtsService 直接处理：暂停时保留前台服务和通知，再次播放从当前句子继续；`EVENT_TTS_PAUSED` 通知 ReaderViewModel 同步 UI 状态
+- 通知栏上一章/下一章由 TtsService 发出 `EVENT_TTS_PREV_CHAPTER` / `EVENT_TTS_NEXT_CHAPTER`，ReaderViewModel 切换章节后从新章节开头朗读
+- 点击通知栏通过 `MainActivity.ACTION_OPEN_READER` + `EXTRA_FILE_PATH` 回到阅读页；同一文件不会再次调用 `OpenBookStore.open()`，已在阅读页时不重建 ViewModel、不重新 load 文件，朗读从原进度继续
+- TtsService 通过 `onStartCommand` 接收 PendingIntent 通知栏按钮指令；服务返回 `START_NOT_STICKY`，避免进程重建后残留无内容的通知
 - `TtsBus` 已完全移除，UI 层 TTS 状态直接从 `ReaderUiState` 读取

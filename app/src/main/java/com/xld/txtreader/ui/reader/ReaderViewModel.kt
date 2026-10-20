@@ -16,8 +16,12 @@ import com.xld.txtreader.core.RegexPresets
 import com.xld.txtreader.core.SentenceSegmenter
 import com.xld.txtreader.tts.TtsController
 import com.xld.txtreader.OpenBookStore
+import com.xld.txtreader.Subscription
 import com.xld.txtreader.eventEmitter
 import com.xld.txtreader.EVENT_TTS_DONE
+import com.xld.txtreader.EVENT_TTS_NEXT_CHAPTER
+import com.xld.txtreader.EVENT_TTS_PAUSED
+import com.xld.txtreader.EVENT_TTS_PREV_CHAPTER
 import com.xld.txtreader.EVENT_TTS_SENTENCE_START
 import com.xld.txtreader.EVENT_TTS_START
 import com.xld.txtreader.EVENT_TTS_READY
@@ -98,26 +102,28 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     private var persistJob: Job? = null
     private var viewportJob: Job? = null
     private var ttsSentenceIndex = 0
+    private val subscriptions = mutableListOf<Subscription>()
 
     init {
         viewModelScope.launch {
-            eventEmitter.on(EVENT_TTS_START) { _ ->
+            subscriptions += eventEmitter.on(EVENT_TTS_START) { _ ->
                 val c = content ?: return@on
                 val g = currentGlobal()
                 val ch = chapterOf(g)
                 val local = g - (offsets.getOrNull(ch) ?: 0)
                 _state.update {
                     it.copy(
+                        ttsPlaying = true,
                         ttsChapter = ch,
                         ttsPageInChapter = local,
                         ttsPagesInChapter = pageList.getOrNull(ch)?.size ?: 0
                     )
                 }
             }
-            eventEmitter.on(EVENT_TTS_READY) { _ ->
+            subscriptions += eventEmitter.on(EVENT_TTS_READY) { _ ->
                 _state.update { it.copy(ttsAvailable = true) }
             }
-            eventEmitter.on(EVENT_TTS_STOPPED) { _ ->
+            subscriptions += eventEmitter.on(EVENT_TTS_STOPPED) { _ ->
                 _state.update {
                     it.copy(
                         ttsPlaying = false,
@@ -126,9 +132,25 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                     )
                 }
             }
-            eventEmitter.on(EVENT_TTS_SENTENCE_START) { index ->
+            subscriptions += eventEmitter.on(EVENT_TTS_PAUSED) { _ ->
+                _state.update {
+                    it.copy(
+                        ttsPlaying = false,
+                        ttsHighlightIndex = -1,
+                        ttsHighlightRanges = emptyList()
+                    )
+                }
+            }
+            subscriptions += eventEmitter.on(EVENT_TTS_PREV_CHAPTER) { _ ->
+                switchChapterFromNotification(currentChapter - 1)
+            }
+            subscriptions += eventEmitter.on(EVENT_TTS_NEXT_CHAPTER) { _ ->
+                switchChapterFromNotification(currentChapter + 1)
+            }
+            subscriptions += eventEmitter.on(EVENT_TTS_SENTENCE_START) { index ->
                 val idx = index as? Int ?: return@on
                 val c = content ?: return@on
+                ttsSentenceIndex = idx
                 val text = pageTextAt(currentGlobal())
                 val sentences = SentenceSegmenter.split(text)
                 val ranges = sentences.map { it.start..it.end }
@@ -136,7 +158,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                     it.copy(ttsHighlightIndex = idx, ttsHighlightRanges = ranges)
                 }
             }
-            eventEmitter.on(EVENT_TTS_DONE) { _ ->
+            subscriptions += eventEmitter.on(EVENT_TTS_DONE) { _ ->
                 _state.update {
                     it.copy(ttsHighlightIndex = -1, ttsHighlightRanges = emptyList())
                 }
@@ -708,7 +730,14 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         val ch = currentChapter
         val chTitle = c.chapterTitle(ch)
         ttsSentenceIndex = startIndex
-        controller.play(text, startIndex)
+        controller.play(
+            text = text,
+            startIndex = startIndex,
+            bookTitle = c.fileName,
+            chapterNumber = ch + 1,
+            totalChapters = c.totalChapter,
+            filePath = c.filePath,
+        )
         _state.update {
             it.copy(
                 ttsPlaying = true,
@@ -753,6 +782,15 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
 
     fun ttsNextChapter() {
         jumpChapter(currentChapter + 1)
+    }
+
+    /** 通知栏章节按钮：切换章节后立即从新章节开头朗读 */
+    private fun switchChapterFromNotification(target: Int) {
+        val c = content ?: return
+        if (target !in c.chapters.indices) return
+        val wasPlaying = _state.value.ttsPlaying
+        jumpTo(target, 0)
+        if (!wasPlaying) ttsPlayCurrent()
     }
 
     fun ttsSpeed(value: Float) {
@@ -904,6 +942,12 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 c.text.length.toLong()
             )
         }
+    }
+
+    override fun onCleared() {
+        subscriptions.forEach { it.cancel() }
+        subscriptions.clear()
+        super.onCleared()
     }
 
     companion object {

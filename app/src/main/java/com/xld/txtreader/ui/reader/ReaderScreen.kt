@@ -92,9 +92,15 @@ fun ReaderScreen(onBack: () -> Unit) {
     val vm: ReaderViewModel = viewModel(factory = factory)
     val state by vm.state.collectAsStateWithLifecycle()
     val fileChangeTrigger by OpenBookStore.fileChangeTrigger.collectAsStateWithLifecycle()
+    var handledFileTrigger by remember { mutableStateOf(fileChangeTrigger) }
 
+    // 首次进入由 ViewModel.init 负责加载；这里仅响应之后真正的文件切换事件，
+    // 避免通知栏回到阅读页或界面重建时重复 load() 重置朗读进度
     LaunchedEffect(fileChangeTrigger) {
-        vm.load()
+        if (fileChangeTrigger != handledFileTrigger) {
+            handledFileTrigger = fileChangeTrigger
+            vm.load()
+        }
     }
 
     // 系统亮/暗色切换时刷新正文默认配色（仅未手动选色时生效）
