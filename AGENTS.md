@@ -191,7 +191,7 @@ Room 编译器使用 KSP（非 kapt）。实体 `BookRecord` 使用 `@Upsert` �
 - TtsService 是纯文本朗读服务，接收 `EVENT_TTS_PLAY` 事件中的整页文本，调用 `tts.speak(text, QUEUE_FLUSH)` 直接朗读
 - `TtsController` 通过 `startService(Intent)` 向 TtsService 发送播放指令（含文本和书籍信息）
 - `EventEmitter` 传递事件：ReaderViewModel → TtsService（PLAY/PAUSE/STOP/NEXT_PAGE/SPEED等）、TtsService → ReaderViewModel（`EVENT_TTS_DONE`/`EVENT_TTS_START`/`EVENT_TTS_READY`）
-- `EVENT_TTS_DONE` 由 TtsService 在 `onUtteranceDone()` 时发出，ReaderViewModel 收到后自动翻到下一页并朗读新文本
+- `EVENT_TTS_DONE` 由 TtsService 在 `onUtteranceDone()` 时发出，ReaderViewModel 收到后自动翻到下一页并朗读新文本；若当前已是全书最后一页（`hasNextPage()` 为 false），则调用 `stopTts()` 停止朗读、清除高亮并结束前台服务，避免 `seekToGlobal` 钳制到末页后无限重复朗读
 - 停止/暂停朗读（`stopTts`/`ttsToggle`/`backPage`/`EVENT_TTS_STOPPED`）以及翻页、章节跳转、进度跳转时，均清除朗读句子高亮（`ttsHighlightIndex=-1`、`ttsHighlightRanges` 置空），避免残留高亮
 - TtsService 不进行分页/内容加载，仅朗读当前页面文本
 - 通知栏使用 `MediaSessionCompat` + `NotificationCompat.MediaStyle` 媒体通知：标题为 txt 文件名，正文为“第 N 章 / 共 M 章”，按钮为上一章、播放/暂停、下一章

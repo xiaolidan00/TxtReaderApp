@@ -163,7 +163,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                     it.copy(ttsHighlightIndex = -1, ttsHighlightRanges = emptyList())
                 }
                 viewModelScope.launch {
-                    ttsNextPage()
+                    // 全书最后一页朗读完毕：停止朗读并清除高亮，避免 seekToGlobal 钳制后重复朗读末页
+                    if (hasNextPage()) ttsNextPage() else stopTts()
                 }
             }
             // 监听 content 变化，自动更新 TTS 文本（全文 hashCode 较重，放后台线程避免卡主线程）
@@ -774,6 +775,13 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
 
     fun ttsNextPage() {
         moveByPage(1)
+    }
+
+    /** 当前页之后是否还有页面（用于判断朗读是否已到全书末尾） */
+    private fun hasNextPage(): Boolean {
+        if (offsets.isEmpty()) return false
+        val total = offsets[offsets.size - 1]
+        return currentGlobal() < total - 1
     }
 
     fun ttsPrevChapter() {
