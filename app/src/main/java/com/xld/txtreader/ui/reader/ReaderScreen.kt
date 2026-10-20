@@ -124,9 +124,35 @@ fun ReaderScreen(onBack: () -> Unit) {
     val padXPx = with(densities) { 20.dp.toPx() }
     val padYPx = with(densities) { 12.dp.toPx() }
 
-    // 阅读页统一配色：顶栏/底栏/正文共用，跟随系统暗色（未手动选色时）
+    // 阅读页统一配色：顶栏/底栏/正文/抽屉共用，跟随系统暗色（未手动选色时）
     val readingBg = Color(state.bgColor.toInt())
     val readingText = Color(state.textColor.toInt())
+
+    // 抽屉内所有 Material 组件都改为跟随阅读配色，避免暗色主题下出现与背景冲突的默认色
+    val drawerColorScheme = MaterialTheme.colorScheme.copy(
+        primary = readingText,
+        onPrimary = readingBg,
+        primaryContainer = readingBg,
+        onPrimaryContainer = readingText,
+        background = readingBg,
+        onBackground = readingText,
+        surface = readingBg,
+        onSurface = readingText,
+        surfaceVariant = readingBg,
+        onSurfaceVariant = readingText.copy(alpha = 0.7f),
+        surfaceTint = Color.Transparent,
+        surfaceBright = readingBg,
+        surfaceDim = readingBg,
+        surfaceContainer = readingBg,
+        surfaceContainerHigh = readingBg,
+        surfaceContainerHighest = readingBg,
+        surfaceContainerLow = readingBg,
+        surfaceContainerLowest = readingBg,
+        outline = readingText.copy(alpha = 0.4f),
+        outlineVariant = readingText.copy(alpha = 0.2f),
+        inverseSurface = readingText,
+        inverseOnSurface = readingBg,
+    )
 
     // 抽屉打开时返回键关闭抽屉而非退出阅读页
     BackHandler(enabled = drawerKind != null) {
@@ -270,35 +296,37 @@ fun ReaderScreen(onBack: () -> Unit) {
                     contentColor = readingText,
                     shadowElevation = 8.dp,
                 ) {
-                    when (drawerKind) {
-                        SheetKind.CHAPTERS -> ChapterSheet(
-                            currentChapter = state.currentChapter,
-                            chapters = state.chapters,
-                            onJump = { chapter -> vm.jumpChapter(chapter); closeDrawer() },
-                            onClose = { closeDrawer() },
-                        )
+                    MaterialTheme(colorScheme = drawerColorScheme) {
+                        when (drawerKind) {
+                            SheetKind.CHAPTERS -> ChapterSheet(
+                                currentChapter = state.currentChapter,
+                                chapters = state.chapters,
+                                onJump = { chapter -> vm.jumpChapter(chapter); closeDrawer() },
+                                onClose = { closeDrawer() },
+                            )
 
-                        SheetKind.SEARCH -> SearchSheet(
-                            state = state,
-                            onInput = vm::onSearchInput,
-                            onSearch = vm::search,
-                            onJump = { hit -> vm.jumpToHit(hit, state.searchQuery); closeDrawer() },
-                            onClose = { closeDrawer() },
-                        )
+                            SheetKind.SEARCH -> SearchSheet(
+                                state = state,
+                                onInput = vm::onSearchInput,
+                                onSearch = vm::search,
+                                onJump = { hit -> vm.jumpToHit(hit, state.searchQuery); closeDrawer() },
+                                onClose = { closeDrawer() },
+                            )
 
-                        SheetKind.SETTINGS -> SettingsSheet(
-                            state = state,
-                            onFont = vm::setFont,
-                            onLineSpacing = vm::setLineSpacing,
-                            onTextColor = vm::setTextColor,
-                            onBgColor = vm::setBgColor,
-                            onRegex = vm::setRegex,
-                            onRegexCustom = vm::setRegexCustom,
-                            onEncode = vm::setEncode,
-                            onClose = { closeDrawer() },
-                        )
+                            SheetKind.SETTINGS -> SettingsSheet(
+                                state = state,
+                                onFont = vm::setFont,
+                                onLineSpacing = vm::setLineSpacing,
+                                onTextColor = vm::setTextColor,
+                                onBgColor = vm::setBgColor,
+                                onRegex = vm::setRegex,
+                                onRegexCustom = vm::setRegexCustom,
+                                onEncode = vm::setEncode,
+                                onClose = { closeDrawer() },
+                            )
 
-                        else -> {}
+                            else -> {}
+                        }
                     }
                 }
             }
@@ -878,18 +906,10 @@ private fun highlightSentence(
 
 private val TEXT_COLORS = listOf(
     0xFF000000 to "黑",
-    0xFF333333 to "深灰",
-    0xFF1A237E to "深蓝",
-    0xFF4E342E to "棕",
     0xFFFFFFFF to "白",
-    0xFFCCCCCC to "灰",
 )
 private val BG_COLORS = listOf(
     0xFFFFF9F0 to "米白",
-    0xFFFFFFFF to "白",
-    0xFFF5F5DC to "米黄",
-    0xFFECEFF1 to "浅灰",
-    0xFFE0F2F1 to "浅青",
     0xFF000000 to "夜黑",
 )
 

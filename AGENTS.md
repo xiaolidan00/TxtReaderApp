@@ -191,6 +191,7 @@ Room 编译器使用 KSP（非 kapt）。实体 `BookRecord` 使用 `@Upsert` �
 - `TtsController` 通过 `startService(Intent)` 向 TtsService 发送播放指令（含文本和书籍信息）
 - `EventEmitter` 传递事件：ReaderViewModel → TtsService（PLAY/PAUSE/STOP/NEXT_PAGE/SPEED等）、TtsService → ReaderViewModel（`EVENT_TTS_DONE`/`EVENT_TTS_START`/`EVENT_TTS_READY`）
 - `EVENT_TTS_DONE` 由 TtsService 在 `onUtteranceDone()` 时发出，ReaderViewModel 收到后自动翻到下一页并朗读新文本
+- 停止/暂停朗读（`stopTts`/`ttsToggle`/`backPage`/`EVENT_TTS_STOPPED`）以及翻页、章节跳转、进度跳转时，均清除朗读句子高亮（`ttsHighlightIndex=-1`、`ttsHighlightRanges` 置空），避免残留高亮
 - TtsService 不进行分页/内容加载，仅朗读当前页面文本
 - 通知栏使用 `CATEGORY_TRANSPORT` + `FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK` 媒体播放通知
 - TtsService 通过 `onStartCommand` 接收 PendingIntent 通知栏按钮指令，转换为 `startService` 调用

@@ -118,7 +118,13 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 _state.update { it.copy(ttsAvailable = true) }
             }
             eventEmitter.on(EVENT_TTS_STOPPED) { _ ->
-                _state.update { it.copy(ttsPlaying = false) }
+                _state.update {
+                    it.copy(
+                        ttsPlaying = false,
+                        ttsHighlightIndex = -1,
+                        ttsHighlightRanges = emptyList()
+                    )
+                }
             }
             eventEmitter.on(EVENT_TTS_SENTENCE_START) { index ->
                 val idx = index as? Int ?: return@on
@@ -389,7 +395,13 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         val wasPlaying = _state.value.ttsPlaying
         if (wasPlaying) {
             controller.stop()
-            _state.update { it.copy(ttsPlaying = false) }
+            _state.update {
+                it.copy(
+                    ttsPlaying = false,
+                    ttsHighlightIndex = -1,
+                    ttsHighlightRanges = emptyList()
+                )
+            }
         }
         persist()
     }
@@ -413,6 +425,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 controller.stop()
                 _state.update { it.copy(ttsPlaying = false) }
             }
+            // 翻页后旧的句子高亮范围已失效，先清除，再按新页文本重新标注
+            _state.update { it.copy(ttsHighlightIndex = -1, ttsHighlightRanges = emptyList()) }
             currentChapter = ch
             currentPage = local
             _state.update { it.copy(currentChapter = ch, currentPage = local) }
@@ -425,6 +439,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         val c = content ?: return
         if (chapter !in c.chapters.indices) return
         ttsSentenceIndex = 0
+        clearTtsHighlight()
         val wasPlaying = _state.value.ttsPlaying
         if (wasPlaying) {
             _state.update {
@@ -450,6 +465,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
         ttsSentenceIndex = 0
+        clearTtsHighlight()
         val wasPlaying = _state.value.ttsPlaying
         if (wasPlaying) {
             _state.update {
@@ -498,6 +514,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         val ch = chapterOf(g)
         val local = g - offsets[ch]
         ttsSentenceIndex = 0
+        clearTtsHighlight()
         val wasPlaying = _state.value.ttsPlaying
         if (wasPlaying) {
             _state.update {
@@ -710,7 +727,13 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         if (cur.ttsPlaying) {
             ttsSentenceIndex = cur.ttsHighlightIndex.coerceAtLeast(0)
             controller.pause()
-            _state.update { it.copy(ttsPlaying = false) }
+            _state.update {
+                it.copy(
+                    ttsPlaying = false,
+                    ttsHighlightIndex = -1,
+                    ttsHighlightRanges = emptyList()
+                )
+            }
         } else {
             ttsPlayCurrent(ttsSentenceIndex)
         }
@@ -740,7 +763,18 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
 
     fun stopTts() {
         controller.stop()
-        _state.update { it.copy(ttsPlaying = false) }
+        _state.update {
+            it.copy(
+                ttsPlaying = false,
+                ttsHighlightIndex = -1,
+                ttsHighlightRanges = emptyList()
+            )
+        }
+    }
+
+    /** 清除朗读句子高亮（停止/暂停/翻页/跳转时调用） */
+    private fun clearTtsHighlight() {
+        _state.update { it.copy(ttsHighlightIndex = -1, ttsHighlightRanges = emptyList()) }
     }
 
     private fun moveByPage(delta: Int) {
