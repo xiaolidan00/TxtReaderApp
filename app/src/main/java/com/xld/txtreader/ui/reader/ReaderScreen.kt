@@ -601,6 +601,39 @@ private fun ChapterSheet(
         val windowItems = if (searching) filtered
         else filtered.drop(pageStart).take(CHAPTER_PAGE_SIZE)
 
+
+        // 分页切换栏（搜索时隐藏，跨全书显示结果）
+        if (!searching) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(
+                    onClick = { page = (page - 1).coerceAtLeast(0) },
+                    enabled = page > 0,
+                ) { Text("上一页") }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "第 ${page + 1}/$totalChapterPages 页",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    val end = minOf(pageStart + CHAPTER_PAGE_SIZE, chapters.size)
+                    Text(
+                        "${pageStart + 1}–$end 章 / 共 ${chapters.size} 章",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(
+                    onClick = { page = (page + 1).coerceAtMost(totalChapterPages - 1) },
+                    enabled = page < totalChapterPages - 1,
+                ) { Text("下一页") }
+            }
+        }
+
         if (filtered.isEmpty()) {
             Text(
                 "无匹配章节",
@@ -633,37 +666,7 @@ private fun ChapterSheet(
                 }
             }
 
-            // 分页切换栏（搜索时隐藏，跨全书显示结果）
-            if (!searching) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TextButton(
-                        onClick = { page = (page - 1).coerceAtLeast(0) },
-                        enabled = page > 0,
-                    ) { Text("上一页") }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            "第 ${page + 1}/$totalChapterPages 页",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        val end = minOf(pageStart + CHAPTER_PAGE_SIZE, chapters.size)
-                        Text(
-                            "${pageStart + 1}–$end 章 / 共 ${chapters.size} 章",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    TextButton(
-                        onClick = { page = (page + 1).coerceAtMost(totalChapterPages - 1) },
-                        enabled = page < totalChapterPages - 1,
-                    ) { Text("下一页") }
-                }
-            }
+
         }
     }
 }
