@@ -26,7 +26,7 @@ import com.xld.txtreader.ui.theme.TxtReaderTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
-
+import com.xld.txtreader.ui.update.UpdateHost
 class MainActivity : ComponentActivity() {
 
     private val pendingBookPath = MutableStateFlow<Int>(0)
@@ -51,6 +51,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             TxtReaderTheme {
                 MainNav()
+                // 应用内升级弹窗，覆盖在任意页面之上
+                UpdateHost()
             }
         }
         handleOpenIntent(intent)
