@@ -164,6 +164,9 @@ class TtsService : Service() {
                         Log.e("TtsService", "onError utterance=$utteranceId code=$errorCode")
                         onUtteranceDone()
                     }
+                     override fun onStop(utteranceId: String, interrupted: Boolean) {
+                        Log.w("TTS", "onStop: $utteranceId, interrupted=$interrupted")
+                    }
                 })
             }
             ready = ok

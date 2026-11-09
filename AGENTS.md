@@ -130,6 +130,27 @@ TxtReaderApp/
 - 批量操作：删除记录（ic_delete_record）、删除文件（ic_delete_file）
 - 每张卡片右上角 ⋮ 菜单：查看详情、删除记录、删除文件
 - 导入方式：系统文件选择器（ACTION_GET_CONTENT）
+- **导入全部 txt**：顶栏 ic_import 图标 + 空状态页文字按钮 → 跳转 `importTxt` 导入页
+- **懒加载**：`UiState.visibleCount`（初始 `PAGE_SIZE=20`），`LazyColumn` 只渲染 `books.take(visibleCount)`；
+  滚动到倒数第 5 项时 `loadMore()` 追加 20 条（`snapshotFlow` 监听 `layoutInfo`，key 含 `visibleCount`/`books.size`）；
+  搜索或排序变化时重置为 20 并 `scrollToItem(0)` 置顶
+
+### 1.1 导入全部 txt 页（ImportTxtScreen，路由 `importTxt`）
+
+- 无权限时显示引导页，点击跳 `ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION`；`LifecycleResumeEffect` 在返回时重试扫描
+- **扫描范围**：常用公共目录（Download/Documents/DCIM/Pictures/Music/Movies/Podcasts/Books/Ringtones/Notifications/Alarms）递归子目录，
+  跳过 `Android/` 与 `.` 开头的隐藏项，深度上限 8 层
+- **过滤**：仅 `.txt`（忽略大小写）且 `file.length() > 1024`（`MIN_TXT_BYTES`），且**已添加到书架的文件不进列表**（扫描时跳过，
+  书架变化时 `removeAddedFiles()` 从列表与勾选集同步移除）
+- 列表项：文件名 + 所在目录 + 大小（`ImportFileRow` 不再有置灰态）
+- 列表分页展示：`visibleFileCount`（初始 100，滚动到底追加 100）
+- 底部操作栏（`navigationBarsPadding()` 避让系统导航栏）：
+  - 未导入时：全选 / 取消全选（仅当有勾选时显示）/ 确认（`已选/总数`）
+  - 导入中：只显示红色「停止导入」按钮，进度条显示 `n/N`
+- **停止导入**：`stopImport()` 取消 `importJob` 并置 `importProgress = null` 恢复可操作；
+  协程内进度回写带 `importProgress == null` 守卫，防止取消间隙覆盖；已导入的文件保留
+- 确认后按列表顺序逐个导入（`EncodingReader` → `ChapterParser` → `repo.addBook`），
+  完成后 `onBack()` 返回书架（Room Flow 自动刷新）
 
 ### 2. 阅读页（ReaderScreen）
 
@@ -169,6 +190,7 @@ Room 编译器使用 KSP（非 kapt）。实体 `BookRecord` 使用 `@Upsert` �
 ### 导航路由
 
 - `booklist` → 书架页（首页）
+- `importTxt` → 导入全部 txt 页（ImportTxtScreen，带返回按钮）
 - `readerContent` → 阅读页（无参数，通过 `OpenBookStore` 单例传递 filePath）
 
 ### 外部文件打开

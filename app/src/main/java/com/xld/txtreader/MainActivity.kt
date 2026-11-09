@@ -21,6 +21,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.xld.txtreader.ui.booklist.BookListScreen
+import com.xld.txtreader.ui.booklist.ImportTxtScreen
 import com.xld.txtreader.ui.reader.ReaderScreen
 import com.xld.txtreader.ui.theme.TxtReaderTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -225,7 +226,11 @@ class MainActivity : ComponentActivity() {
                         OpenBookStore.open(path)
                         navController.navigate("readerContent") { launchSingleTop = true }
                     },
+                    onImportAll = { navController.navigate("importTxt") },
                 )
+            }
+            composable("importTxt") {
+                ImportTxtScreen(onBack = { navController.popBackStack() })
             }
             composable("readerContent") {
                 ReaderScreen(onBack = { navController.popBackStack() })

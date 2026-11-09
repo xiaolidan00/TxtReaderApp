@@ -506,7 +506,7 @@ private fun ReaderPagerHost(
 }
 
 /** 章节目录每页章节数：当前章节前后 20 章 + 当前章 = 40 */
-private const val CHAPTER_PAGE_SIZE = 40
+private const val CHAPTER_PAGE_SIZE = 100
 
 /** 抽屉面板通用标题栏：标题 + 关闭按钮 */
 @Composable

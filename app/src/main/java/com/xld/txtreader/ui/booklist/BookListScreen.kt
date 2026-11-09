@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -33,9 +34,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,10 +54,11 @@ import com.xld.txtreader.R
 import com.xld.txtreader.data.db.BookRecord
 import com.xld.txtreader.formatSize
 import com.xld.txtreader.formatTime
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BookListScreen(onOpenBook: (String) -> Unit) {
+fun BookListScreen(onOpenBook: (String) -> Unit, onImportAll: () -> Unit) {
     val factory = remember {
         viewModelFactory {
             initializer { BookListViewModel(ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY.let { this[it]!! }) }
@@ -102,8 +106,11 @@ fun BookListScreen(onOpenBook: (String) -> Unit) {
                 TopAppBar(
                     title = { Text("书架") },
                     actions = {
+                        IconButton(onClick = onImportAll) {
+                            Icon(painterResource(R.drawable.ic_import), contentDescription = "导入txt文件")
+                        }
                         IconButton(onClick = { filePicker.launch(arrayOf("text/plain", "text/*", "application/octet-stream")) }) {
-                            Icon(painterResource(R.drawable.ic_add), contentDescription = "添加txt")
+                            Icon(painterResource(R.drawable.ic_add), contentDescription = "添加多个txt")
                         }
                         IconButton(onClick = { sortMenu = true }) {
                             Icon(painterResource(R.drawable.ic_sort), contentDescription = "排序")
@@ -153,19 +160,41 @@ fun BookListScreen(onOpenBook: (String) -> Unit) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("书架空空如也")
                             Text(
-                                "点击 + 添加 txt 文件",
+                                "点击 + 手动添加多个 txt 文件",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(top = 8.dp),
                             )
+                            TextButton(onClick = onImportAll, modifier = Modifier.padding(top = 8.dp)) {
+                                Text("导入 txt 文件")
+                            }
                         }
                     } else {
                         Text("没有匹配的书籍")
                     }
                 }
             } else {
-                LazyColumn(Modifier.fillMaxSize()) {
-                    items(state.books, key = { it.filePath }) { book ->
+                val listState = rememberLazyListState()
+
+                // 搜索/排序变化时回到列表顶部（配合 ViewModel 重置分页）
+                LaunchedEffect(state.keyword, state.sortKey, state.ascending, state.books.size) {
+                    listState.scrollToItem(0)
+                }
+
+                // 滚动到倒数第 5 项时追加一页；key 含 visibleCount，追加后重新评估
+                LaunchedEffect(listState, state.visibleCount, state.books.size) {
+                    snapshotFlow {
+                        val info = listState.layoutInfo
+                        val total = info.totalItemsCount
+                        val last = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+                        total > 0 && last >= total - 5
+                    }.distinctUntilChanged().collect { nearBottom ->
+                        if (nearBottom && state.visibleCount < state.books.size) vm.loadMore()
+                    }
+                }
+
+                LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                    items(state.visibleBooks, key = { it.filePath }) { book ->
                         val selected = book.filePath in state.selectedPaths
                         BookCard(
                             book = book,

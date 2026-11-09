@@ -27,7 +27,13 @@ class BookListViewModel(application: Application) : AndroidViewModel(application
         val sortKey: SortKey = SortKey.TIME,
         val ascending: Boolean = false,
         val selectedPaths: Set<String> = emptySet(),
-    )
+        /** 书架懒加载：当前已展示条数，每次追加 PAGE_SIZE 条 */
+        val visibleCount: Int = PAGE_SIZE,
+    ) {
+        /** 当前展示的列表切片 */
+        val visibleBooks: List<BookRecord>
+            get() = books.take(visibleCount)
+    }
 
     private val repo get() = getApplication<Application>().appRepositories
 
@@ -52,12 +58,26 @@ class BookListViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun setKeyword(value: String) {
+        if (keyword.value == value) return
         keyword.value = value
+        // 关键字变化时重置分页并回顶
+        _state.update { it.copy(visibleCount = PAGE_SIZE) }
     }
 
     fun setSort(key: SortKey, asc: Boolean) {
+        if (sortKey.value == key && ascending.value == asc) return
         sortKey.value = key
         ascending.value = asc
+        // 排序变化时重置分页并回顶
+        _state.update { it.copy(visibleCount = PAGE_SIZE) }
+    }
+
+    /** 滑动到底部附近时追加一页 */
+    fun loadMore() {
+        _state.update { s ->
+            if (s.visibleCount >= s.books.size) s
+            else s.copy(visibleCount = s.visibleCount + PAGE_SIZE)
+        }
     }
 
     fun deleteRecord(path: String) {
@@ -171,5 +191,10 @@ class BookListViewModel(application: Application) : AndroidViewModel(application
             SortKey.SIZE -> filtered.sortedBy { it.fileSize }
         }
         return if (asc) sorted else sorted.reversed()
+    }
+
+    companion object {
+        /** 书架列表每页加载条数 */
+        const val PAGE_SIZE = 20
     }
 }
