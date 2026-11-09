@@ -89,10 +89,10 @@ class UpdateViewModel(context: Context) : ViewModel() {
         }
     }
 
-    /** 弹窗「立即升级」：开始后台下载 */
+    /** 弹窗「立即升级」：本地已有该版本完整 APK 则直接安装，否则开始后台下载 */
     fun onUpgradeClicked() {
         val available = _state.value as? UpdateUiState.Available ?: return
-        startDownload(available.update)
+        beginUpgrade(available.update)
     }
 
     /** 弹窗「稍后」/ 下载弹窗「取消下载」：忽略该版本，本次不再提示 */
@@ -131,12 +131,20 @@ class UpdateViewModel(context: Context) : ViewModel() {
         }
     }
 
-    // ---- 下载 ----
+    // ---- 下载/安装 ----
 
-    private fun startDownload(update: AppUpdate) {
-        // 立即切到下载中：防止确认弹窗重复点击重复入队
+    private fun beginUpgrade(update: AppUpdate) {
+        // 立即切到下载中：防止确认弹窗重复点击重复入队/重复安装
         _state.value = UpdateUiState.Downloading(update, 0, dialogVisible = true)
         viewModelScope.launch {
+            // 上次已下载完成的 APK 直接安装，不重复下载
+            val existing = withContext(Dispatchers.IO) { findValidApk(update) }
+            if (existing != null) {
+                _state.value = UpdateUiState.None
+                pendingInstallFile = existing
+                launchInstall()
+                return@launch
+            }
             val apkFile = withContext(Dispatchers.IO) { prepareApkFile(update.versionName) }
             val id = apkFile?.let {
                 withContext(Dispatchers.IO) { enqueueDownload(update, it) }
@@ -157,6 +165,24 @@ class UpdateViewModel(context: Context) : ViewModel() {
         }
     }
 
+    /**
+     * 查找下载目录中该版本已下载完成的 APK。
+     *
+     * 按 Release asset 的 size 校验完整性，排除上次下载中断留下的残缺文件
+     * （不匹配则删除，走重新下载）；size 未知（<=0）时按存在即有效处理。
+     */
+    private fun findValidApk(update: AppUpdate): File? {
+        val dir = appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+            ?: return null
+        val apkFile = File(dir, "TXT-Reader-v${update.versionName}.apk")
+        if (!apkFile.isFile) return null
+        if (update.apkSize > 0 && apkFile.length() != update.apkSize) {
+            apkFile.delete()
+            return null
+        }
+        return apkFile
+    }
+
     /** 清理上一次残留的下载任务与文件，返回目标 APK 文件 */
     private fun prepareApkFile(versionName: String): File? {
         val oldId = prefs.getLong(KEY_DOWNLOAD_ID, -1L)
@@ -167,7 +193,7 @@ class UpdateViewModel(context: Context) : ViewModel() {
         val dir = appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
             ?: appContext.filesDir
         if (!dir.exists() && !dir.mkdirs()) return null
-        val apkFile = File(dir, "PDFReader-$versionName.apk")
+        val apkFile = File(dir, "TXT-Reader-v$versionName.apk")
         if (apkFile.exists()) apkFile.delete()
         return apkFile
     }

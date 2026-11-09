@@ -13,7 +13,9 @@ data class AppUpdate(
     /** 新版本描述（release body） */
     val description: String,
     /** APK 下载地址（release asset 中以 .apk 结尾的项） */
-    val apkUrl: String
+    val apkUrl: String,
+    /** APK 文件字节数（release asset 的 size），用于校验本地已下载文件完整性，0 = 未知 */
+    val apkSize: Long
 )
 
 /**
@@ -38,18 +40,19 @@ object UpdateChecker {
             if (version.isEmpty() || !isNewer(version, localVersion)) {
                 return@withContext null
             }
-            val apkUrl = json.optJSONArray("assets")?.let { assets ->
+            val apkAsset = json.optJSONArray("assets")?.let { assets ->
                 (0 until assets.length())
                     .mapNotNull { assets.optJSONObject(it) }
                     .firstOrNull { it.optString("name").endsWith(".apk", ignoreCase = true) }
-                    ?.optString("browser_download_url")
-                    ?.takeIf { it.isNotBlank() }
             } ?: return@withContext null
+            val apkUrl = apkAsset.optString("browser_download_url")
+                .takeIf { it.isNotBlank() } ?: return@withContext null
 
             AppUpdate(
                 versionName = version,
                 description = json.optString("body").trim(),
-                apkUrl = apkUrl
+                apkUrl = apkUrl,
+                apkSize = apkAsset.optLong("size", 0L)
             )
         } catch (e: Exception) {
             null
@@ -63,7 +66,7 @@ object UpdateChecker {
             connection.readTimeout = READ_TIMEOUT_MS
             connection.requestMethod = "GET"
             connection.setRequestProperty("Accept", "application/vnd.github+json")
-            connection.setRequestProperty("User-Agent", "PDFReaderApp")
+            connection.setRequestProperty("User-Agent", "TxtReaderApp")
             if (connection.responseCode != HttpURLConnection.HTTP_OK) return null
             connection.inputStream.use { JSONObject(it.readBytes().decodeToString()) }
         } finally {

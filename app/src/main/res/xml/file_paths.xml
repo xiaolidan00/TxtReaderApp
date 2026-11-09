@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- DownloadManager 的下载目录：getExternalFilesDir(DIRECTORY_DOWNLOADS) -->
+<paths>
+    <external-files-path
+        name="external_downloads"
+        path="Download/" />
+</paths>

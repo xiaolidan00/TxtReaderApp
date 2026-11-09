@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Txt阅读器</string>
+    <string name="app_name">TXT阅读器</string>
 
     <!-- 应用升级 -->
     <string name="update_prompt_title">发现新版本 v%1$s</string>
