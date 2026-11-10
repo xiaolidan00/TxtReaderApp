@@ -24,4 +24,4 @@
 
 # Keep event emitter and TTS classes
 -keep class com.xld.txtreader.tts.** { *; }
--keep class com.xld.txtreader.eventEmitter { *; }
+-keep class com.xld.txtreader.update.** { *; }
