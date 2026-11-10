@@ -19,7 +19,7 @@ class BookContent(
 
     fun chapterText(index: Int): String {
         val ch = chapters.getOrNull(index) ?: return ""
-        return ch.content.ifEmpty { text.substring(ch.start, ch.end) }
+        return ch.content;
     }
 }
 

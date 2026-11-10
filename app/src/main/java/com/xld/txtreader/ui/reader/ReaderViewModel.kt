@@ -319,7 +319,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 val regexStr = record?.regexStr?.takeIf { it.isNotBlank() }
                     ?: previousContent?.regexStr
                     ?: RegexPresets.list[regexType].value
-                val chapters = ChapterParser.parse(text, regexStr)
+                val chapters = ChapterParser.parse(text, regexStr, fileName)
                 val book = BookContent(
                     path,
                     fileName,
@@ -607,29 +607,26 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setRegex(type: Int) {
         if (type !in RegexPresets.list.indices) return
-
-        if (type == RegexPresets.CUSTOM_INDEX) {
-            _state.update { it.copy(regexType = type) }
-            return
-        }
         val c = content ?: return
         val preset = RegexPresets.list[type]
-        if (preset.value == "") {
-            _state.update { it.copy(regexType = type) }
+        var regexs=preset.value
+        if (regexs== "") {
+            regexs=_state.value.regexStr;
+            _state.update { it.copy(regexType = type,  currentChapter = 0, currentPage = 0) }
         } else {
-            _state.update { it.copy(regexType = type, regexStr = preset.value) }
+            _state.update { it.copy(regexType = type, regexStr = regexs,  currentChapter = 0, currentPage = 0) }
         }
 
 
         viewModelScope.launch(Dispatchers.IO) {
-            val chapters = ChapterParser.parse(c.text, preset.value)
+            val chapters = ChapterParser.parse(c.text, preset.value, c.fileName)
             val updated = BookContent(
                 c.filePath,
                 c.fileName,
                 c.text,
                 chapters,
                 c.encodeStr,
-                preset.value,
+                regexs,
                 type
             )
             content = updated
@@ -643,11 +640,10 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         if (pattern.isBlank()) return
         val c = content ?: return
         if (pattern == c.regexStr) {
-            _state.update { it.copy(regexType = RegexPresets.CUSTOM_INDEX, regexStr = pattern) }
-            return
+            _state.update { it.copy(regexType = RegexPresets.CUSTOM_INDEX, regexStr = pattern, currentChapter = 0, currentPage = 0) }
         }
         viewModelScope.launch(Dispatchers.IO) {
-            val chapters = ChapterParser.parse(c.text, pattern)
+            val chapters = ChapterParser.parse(c.text, pattern, c.fileName)
             val updated = BookContent(
                 c.filePath,
                 c.fileName,

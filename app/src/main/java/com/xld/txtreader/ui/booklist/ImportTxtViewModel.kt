@@ -259,7 +259,7 @@ class ImportTxtViewModel(application: Application) : AndroidViewModel(applicatio
         val charset = EncodingReader.detectCharset(bytes)
         val text = EncodingReader.decode(bytes, charset)
         val preset = RegexPresets.default()
-        val chapters = ChapterParser.parse(text, preset.value)
+        val chapters = ChapterParser.parse(text, preset.value, file.name)
         val content = com.xld.txtreader.core.BookContent(
             filePath = path,
             fileName = file.name,

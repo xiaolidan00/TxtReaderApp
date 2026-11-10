@@ -128,7 +128,7 @@ class BookRepository(private val db: AppDatabase, private val context: Context) 
             val charset = runCatching { EncodingReader.detectCharset(file) }.getOrDefault("UTF-8")
             val text = EncodingReader.readText(file, charset)
             val preset = RegexPresets.default()
-            val chapters = ChapterParser.parse(text, preset.value)
+            val chapters = ChapterParser.parse(text, preset.value, file.name)
             dao.upsert(
                 BookRecord(
                     filePath = path,

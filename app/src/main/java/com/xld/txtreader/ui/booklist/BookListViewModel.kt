@@ -316,7 +316,7 @@ class BookListViewModel(application: Application) : AndroidViewModel(application
                 val charset = com.xld.txtreader.core.EncodingReader.detectCharset(bytes)
                 val text = com.xld.txtreader.core.EncodingReader.decode(bytes, charset)
                 val preset = com.xld.txtreader.core.RegexPresets.default()
-                val chapters = com.xld.txtreader.core.ChapterParser.parse(text, preset.value)
+                val chapters = com.xld.txtreader.core.ChapterParser.parse(text, preset.value, name)
                 val content = com.xld.txtreader.core.BookContent(
                     filePath = path,
                     fileName = name,

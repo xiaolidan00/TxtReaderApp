@@ -642,9 +642,11 @@ private fun ChapterSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            LazyColumn(state = listState, modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)) {
+            LazyColumn(
+                state = listState, modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
                 itemsIndexed(windowItems, key = { _, item -> item.first }) { _, (index, title) ->
                     val display = title.ifBlank { "第${index + 1}章" }
                     val isCurrent = index == currentChapter
@@ -847,9 +849,11 @@ private fun SearchSheet(
         } else if (state.searchResults.isEmpty() && state.searchQuery.isNotBlank()) {
             Text("没有找到相关内容", modifier = Modifier.padding(horizontal = 16.dp))
         } else {
-            LazyColumn(Modifier
-                .fillMaxWidth()
-                .weight(1f)) {
+            LazyColumn(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
                 itemsIndexed(state.searchResults) { _, hit ->
                     val kw = state.searchQuery
                     Row(
@@ -1027,12 +1031,11 @@ private fun SettingsSheet(
                         DropdownMenuItem(
                             text = { Text(preset.name) },
                             onClick = {
-                                regexIndex=index;
-                                if( regexIndex != RegexPresets.CUSTOM_INDEX){
-                                    customRegex=preset.value;
-                                }else{
-                                    onRegex(regexIndex);
+                                regexIndex = index;
+                                if (regexIndex != RegexPresets.CUSTOM_INDEX) {
+                                    customRegex = preset.value;
                                 }
+                                onRegex(regexIndex);
                                 regexExpanded = false;
                             },
                         )
@@ -1040,29 +1043,26 @@ private fun SettingsSheet(
                 }
             }
 
-                OutlinedTextField(
-                    value = customRegex,
-                    onValueChange = { customRegex = it },
-                    label = { Text("自定义正则表达式") },
-                    singleLine = true,
-                    enabled = regexIndex == RegexPresets.CUSTOM_INDEX,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                )
-                if(regexIndex == RegexPresets.CUSTOM_INDEX){
+            OutlinedTextField(
+                value = customRegex,
+                onValueChange = { customRegex = it },
+                label = { Text("自定义正则表达式") },
+                singleLine = true,
+                enabled = regexIndex == RegexPresets.CUSTOM_INDEX,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+            )
+            if (regexIndex == RegexPresets.CUSTOM_INDEX) {
                 Button(
                     onClick = {
-                        onRegex(regexIndex);
-                        if(RegexPresets.CUSTOM_INDEX==regexIndex){
-                            onRegexCustom(customRegex);
-                        }
-                      },
+                        onRegexCustom(customRegex);
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp),
                 ) { Text("应用正则") }
-                }
+            }
 
 
             Text(

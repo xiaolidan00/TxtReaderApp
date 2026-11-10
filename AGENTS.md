@@ -69,7 +69,7 @@ TxtReaderApp/
 │       │   ├── OpenBookStore.kt          # 单例，传递 filePath 给 ReaderScreen
 │       │   ├── core/                     # 领域逻辑层（无 Android UI 依赖）
 │       │   │   ├── RegexPresets.kt       # 17 种章节正则预设 + CUSTOM_INDEX=16 哨兵值
-│       │   │   ├── ChapterParser.kt      # 逐行扫描，正则必须匹配行首（range.first==0），≤80字符
+│       │   │   ├── ChapterParser.kt      # 逐行扫描，正则分章逻辑：trim 后整行任意位置匹配判定标题
 │       │   │   ├── Paginator.kt          # 基于 android.text.StaticLayout 的分页（UI和TTS共用）
 │       │   │   ├── EncodingReader.kt     # BOM检测，UTF-8严格 → GBK降级
 │       │   │   └── BookContent.kt        # 书籍模型 + BookSearcher 全文搜索
@@ -128,12 +128,12 @@ TxtReaderApp/
 
 **表 `book_groups`**:
 
-| 字段        | 类型                     | 说明                                    |
-| ----------- | ------------------------ | --------------------------------------- |
-| `id`        | INTEGER (PrimaryKey 自增) | 分组 ID，即 `books.groupId` 引用的值    |
-| `groupName` | TEXT NOT NULL UNIQUE      | 分组名称（唯一索引 `index_book_groups_groupName`，不可重复） |
-| `fileNum`   | INTEGER NOT NULL          | 组内书本数量（冗余字段，变更后回写）    |
-| `updateTime`| INTEGER NOT NULL          | 最近一次分组变更时间（同上）            |
+| 字段         | 类型                      | 说明                                                         |
+| ------------ | ------------------------- | ------------------------------------------------------------ |
+| `id`         | INTEGER (PrimaryKey 自增) | 分组 ID，即 `books.groupId` 引用的值                         |
+| `groupName`  | TEXT NOT NULL UNIQUE      | 分组名称（唯一索引 `index_book_groups_groupName`，不可重复） |
+| `fileNum`    | INTEGER NOT NULL          | 组内书本数量（冗余字段，变更后回写）                         |
+| `updateTime` | INTEGER NOT NULL          | 最近一次分组变更时间（同上）                                 |
 
 - 使用 `@Upsert` 按 `filePath` 去重
 - 版本 1 → 2 通过 `AppDatabase.MIGRATION_1_2` 手写 DDL 升级（建 `book_groups` 表 + `books` 加 `groupId` 列），**不清空已有书架**；`fallbackToDestructiveMigration()` 仅作未知版本兜底
@@ -225,7 +225,7 @@ TxtReaderApp/
 ### 章节正则
 
 - 正则预设按整数索引（0–16）。索引 16 = 自定义正则。
-- `ChapterParser.parse()` 逐行匹配。正则必须在行首匹配（`range.first==0`）。超过 80 字符的行跳过作为正文。
+- `ChapterParser.parse()` 逐行匹配（移植 JS 分章逻辑）：全文先移除 `\r`/`\t` 再按 `\n` 切行；每行 **trim 后整行任意位置匹配**判定标题（无行首锚定、无 80 字符长度限制）；匹配到新标题且与当前章节名不同时切章，同名标题行丢弃；**标题行保留为新章节正文首行**（阅读页正文来自 chapterText，无独立标题头部）；`initialTitle`（各调用点传文件名）为初始章节名，正则无匹配时整书为一章。
 
 ### Room KSP
 
