@@ -16,4 +16,6 @@ data class BookRecord(
     val regexType: Int,
     val regexStr: String,
     val encodeStr: String,
+    /** 所属分组 ID，0 = 未分类（虚拟分组，不写入 book_groups 表） */
+    val groupId: Int = 0,
 )

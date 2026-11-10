@@ -75,16 +75,25 @@ TxtReaderApp/
 │       │   │   └── BookContent.kt        # 书籍模型 + BookSearcher 全文搜索
 │       │   ├── data/                     # 持久化层
 │       │   │   ├── db/
-│       │   │   │   ├── BookRecord.kt     # Room 实体，filePath 为主键
-│       │   │   │   ├── BookDao.kt        # DAO，Flow 查询
-│       │   │   │   └── AppDatabase.kt    # Room 数据库（txtreader.db）
-│       │   │   ├── BookRepository.kt     # 导入/删除/进度 facade
-│       │   │   └── SettingsStore.kt      # SharedPreferences（字体、颜色、视口、TTS语速）
+│       │   │   │   ├── BookRecord.kt     # Room 实体，filePath 为主键，含 groupId
+│       │   │   │   ├── BookGroup.kt      # Room 实体，分组表（id 自增主键、groupName 唯一）
+│       │   │   │   ├── BookDao.kt        # DAO，Flow 查询 + 分组移动/统计
+│       │   │   │   ├── BookGroupDao.kt   # 分组 DAO（增删改名、统计回写）
+│       │   │   │   └── AppDatabase.kt    # Room 数据库（txtreader.db，version 2 + MIGRATION_1_2）
+│       │   │   ├── BookRepository.kt     # 导入/删除/进度/分组 facade
+│       │   │   └── SettingsStore.kt      # SharedPreferences（字体、颜色、视口、TTS语速、书架视图模式）
 │       │   ├── tts/                      # 语音朗读
 │       │   │   ├── TtsController.kt      # 通过 startService 发送指令
 │       │   │   └── TtsService.kt         # 前台服务，通知栏控制，EventEmitter 监听
 │       │   └── ui/                       # Compose UI
-│       │       ├── booklist/             # 书架页（搜索、排序、批量删除）
+│       │       ├── booklist/             # 书架页（列表/分组视图、搜索、排序、分组、批量删除）
+│       │       │   ├── BookListScreen.kt # 书架主界面（视图切换、分组页、分组详情页、各类弹窗）
+│       │       │   ├── BookListViewModel.kt # 视图状态、分组卡片推导、懒加载、分组操作
+│       │       │   ├── FileRow.kt        # 文件列表项（显示所属分组、修改分组菜单）
+│       │       │   ├── GroupRow.kt       # 分组卡片（组名、文件数、重命名/删除菜单）
+│       │       │   ├── BookCard.kt       # 文件详情弹窗 BookDetailDialog
+│       │       │   ├── GroupCard.kt      # 分组选择弹窗 GroupPickerDialog
+│       │       │   ├── ImportTxtScreen.kt / ImportTxtViewModel.kt # 导入全部 txt 页
 │       │       ├── reader/               # 阅读页（分页、设置、TTS、搜索）
 │       │       ├── SettingsUtil.kt       # 系统默认应用设置跳转
 │       │       └── theme/                # MaterialTheme
@@ -98,7 +107,7 @@ TxtReaderApp/
 
 ## 数据库结构
 
-**数据库名**: `txtreader.db`，版本 1，单表。
+**数据库名**: `txtreader.db`，版本 2，两张表。
 
 **表 `books`**:
 
@@ -115,27 +124,62 @@ TxtReaderApp/
 | `regexType`      | INTEGER           | 正则类型索引（0-16，16=自定义） |
 | `regexStr`       | TEXT              | 正则表达式字符串                |
 | `encodeStr`      | TEXT              | 编码字符串（如 UTF-8、GBK）     |
+| `groupId`        | INTEGER NOT NULL  | 所属分组 ID，默认 0 = 未分类    |
+
+**表 `book_groups`**:
+
+| 字段        | 类型                     | 说明                                    |
+| ----------- | ------------------------ | --------------------------------------- |
+| `id`        | INTEGER (PrimaryKey 自增) | 分组 ID，即 `books.groupId` 引用的值    |
+| `groupName` | TEXT NOT NULL UNIQUE      | 分组名称（唯一索引 `index_book_groups_groupName`，不可重复） |
+| `fileNum`   | INTEGER NOT NULL          | 组内书本数量（冗余字段，变更后回写）    |
+| `updateTime`| INTEGER NOT NULL          | 最近一次分组变更时间（同上）            |
 
 - 使用 `@Upsert` 按 `filePath` 去重
-- 通过 `fallbackToDestructiveMigration()` 处理版本迁移（开发阶段）
+- 版本 1 → 2 通过 `AppDatabase.MIGRATION_1_2` 手写 DDL 升级（建 `book_groups` 表 + `books` 加 `groupId` 列），**不清空已有书架**；`fallbackToDestructiveMigration()` 仅作未知版本兜底
+- "未分类" 是虚拟分组：ID 固定为 `0`，不写入 `book_groups`，数量由 `books` 表实时统计
+- `fileNum`/`updateTime` 在新增/删除/移动书本后由 `BookRepository.refreshGroups()` 统一回写
 
 ## 功能需求
 
 ### 1. 书架页（BookListScreen）
 
-- 显示已导入的书籍列表（文件名、大小、最后阅读时间、章节进度）
+- 显示已导入的书籍列表（文件名、大小、最后阅读时间、章节进度、所属分组）
 - 搜索书名
 - 按最近阅读/名称排序
 - 长按进入批量选择模式
-- 批量操作：删除记录（ic_delete_record）、删除文件（ic_delete_file）
-- 每张卡片右上角 ⋮ 菜单：查看详情、删除记录、删除文件
+- 批量操作：删除记录（ic_delete_record）、删除文件（ic_delete_file）、批量修改分组（ic_group）
+- 每张卡片右上角 ⋮ 菜单：查看详情、修改分组、删除记录、删除文件
 - 导入方式：系统文件选择器（ACTION_GET_CONTENT）
 - **导入全部 txt**：顶栏 ic_import 图标 + 空状态页文字按钮 → 跳转 `importTxt` 导入页
 - **懒加载**：`UiState.visibleCount`（初始 `PAGE_SIZE=20`），`LazyColumn` 只渲染 `books.take(visibleCount)`；
   滚动到倒数第 5 项时 `loadMore()` 追加 20 条（`snapshotFlow` 监听 `layoutInfo`，key 含 `visibleCount`/`books.size`）；
   搜索或排序变化时重置为 20 并 `scrollToItem(0)` 置顶
 
-### 1.1 导入全部 txt 页（ImportTxtScreen，路由 `importTxt`）
+### 1.1 视图切换与分组
+
+- **视图切换**：顶栏 `ic_view_group`/`ic_view_list` 图标切换列表视图 / 分组视图，模式持久化到
+  `SettingsStore.bookViewIsGroup`；切换时清空选择与分页
+- **分组视图**（`BookListViewModel.ViewMode.GROUP`）：
+  - 顶栏 `ic_group_add` 图标弹出「添加分组」输入框，重名时内联报错"分组已存在"
+  - 分组卡片 `GroupRow`：组名 + `N 个文件` + 最近更新时间，⋮ 菜单提供重命名 / 删除分组
+  - 删除分组先弹 `AlertDialog` 确认（提示组名与组内文件数，确认后才执行 `vm.deleteGroup`）
+  - 顶栏排序菜单复用为 `GroupSortKey`（文件数 / 时间 / 名称 × 升降序），未分类卡片恒排首位
+  - 搜索框在此视图过滤分组名；进入分组/返回时自动清空关键词
+  - 分组卡片同样懒加载（`groupVisibleCount` + `loadMoreGroups()`）
+- **未分类**：虚拟分组，ID 固定 `0`，不入库、不可重命名/删除，卡片由 `books` 实时统计数量
+- **分组详情页**（`currentGroupId != null`，页面内状态，非独立路由）：
+  - 顶栏显示组名 + 返回按钮（`ic_arrow_back`），内容区首行显示 `组名 · N 个文件`
+  - 文件列表与列表视图完全共用 `FileRow`，独立懒加载 `groupBookVisibleCount`
+  - 搜索框过滤书名，排序菜单走 `SortKey`
+- **修改分组**：`FileRow` ⋮ 菜单「修改分组」→ `GroupPickerDialog` 单选（首项未分类，末项「新增分组」）；
+  选中「新增分组」展开输入框，确认按钮变「创建并移动」，`addGroup` 成功返回新分组 ID 后立即把文件移入，
+  失败（重名/空名）时输入框内联报错且弹窗保持打开；多选模式顶栏 `ic_group` → 同一弹窗批量移动，确认后清空选择
+- 新增/删除/移动书本后由 `BookRepository.refreshGroups()` 回写各分组 `fileNum` 与 `updateTime`
+- 重命名分组只改 `book_groups.groupName`（`books.groupId` 存自增 ID，无需级联）；
+  删除分组时组内书本自动归入未分类
+
+### 1.2 导入全部 txt 页（ImportTxtScreen，路由 `importTxt`）
 
 - 无权限时显示引导页，点击跳 `ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION`；`LifecycleResumeEffect` 在返回时重试扫描
 - **扫描范围**：常用公共目录（Download/Documents/DCIM/Pictures/Music/Movies/Podcasts/Books/Ringtones/Notifications/Alarms）递归子目录，

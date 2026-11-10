@@ -54,4 +54,9 @@ class SettingsStore(context: Context) {
     var bluetoothPermissionRequested: Boolean
         get() = sp.getBoolean("bluetooth_permission_requested", false)
         set(value) { sp.edit().putBoolean("bluetooth_permission_requested", value).apply() }
+
+    /** 书架视图模式：true = 分组视图，false = 列表视图 */
+    var bookViewIsGroup: Boolean
+        get() = sp.getBoolean("book_view_is_group", false)
+        set(value) { sp.edit().putBoolean("book_view_is_group", value).apply() }
 }

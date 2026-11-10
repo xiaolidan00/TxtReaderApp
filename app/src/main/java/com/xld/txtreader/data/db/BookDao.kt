@@ -38,4 +38,24 @@ interface BookDao {
 
     @Query("DELETE FROM books WHERE filePath IN (:paths)")
     suspend fun deleteByPaths(paths: List<String>)
+
+    /** 移动单本书到指定分组（0 = 未分类） */
+    @Query("UPDATE books SET groupId = :groupId WHERE filePath = :path")
+    suspend fun moveToGroup(path: String, groupId: Int)
+
+    /** 批量移动到指定分组 */
+    @Query("UPDATE books SET groupId = :groupId WHERE filePath IN (:paths)")
+    suspend fun moveToGroupBatch(paths: List<String>, groupId: Int)
+
+    /** 取这些书当前所在的分组 ID（去重），用于移动/删除后刷新统计 */
+    @Query("SELECT DISTINCT groupId FROM books WHERE filePath IN (:paths)")
+    suspend fun groupIdsOfPaths(paths: List<String>): List<Int>
+
+    /** 指定分组下的书本数量 */
+    @Query("SELECT COUNT(*) FROM books WHERE groupId = :groupId")
+    suspend fun countByGroup(groupId: Int): Int
+
+    /** 指定分组下的文件路径列表 */
+    @Query("SELECT filePath FROM books WHERE groupId = :groupId")
+    suspend fun pathsInGroup(groupId: Int): List<String>
 }

@@ -129,8 +129,8 @@ class TtsService : Service() {
                         .setUsage(AudioAttributes.USAGE_MEDIA)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                         .build()
-                )               
-               val fallback =
+                )
+                val fallback =
                     listOf(Locale.CHINA, Locale.SIMPLIFIED_CHINESE, Locale.CHINESE, Locale.ENGLISH)
                 val available = tts.availableLanguages
                 Log.d("TtsService", "availableLanguages=$available")
@@ -164,7 +164,8 @@ class TtsService : Service() {
                         Log.e("TtsService", "onError utterance=$utteranceId code=$errorCode")
                         onUtteranceDone()
                     }
-                     override fun onStop(utteranceId: String, interrupted: Boolean) {
+
+                    override fun onStop(utteranceId: String, interrupted: Boolean) {
                         Log.w("TTS", "onStop: $utteranceId, interrupted=$interrupted")
                     }
                 })
@@ -184,6 +185,30 @@ class TtsService : Service() {
                     setReferenceCounted(false)
                 }
         tts = TextToSpeech(this, initListener)
+
+        val focusListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+            when (focusChange) {
+                AudioManager.AUDIOFOCUS_LOSS -> {
+                    pause()
+                }
+
+                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                    pause()
+                    // 可记录断点，稍后恢复
+                }
+
+                AudioManager.AUDIOFOCUS_GAIN -> {
+                    // 可恢复朗读
+                    replay()
+                }
+            }
+        }
+
+        audioManager.requestAudioFocus(
+            focusListener,
+            AudioManager.STREAM_MUSIC,
+            AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
+        )
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -213,11 +238,7 @@ class TtsService : Service() {
             }
 
             TtsController.ACTION_TOGGLE -> {
-                if (isSpeaking) {
-                    pause()
-                } else {
-                    resumePlayback()
-                }
+                replay()
             }
 
             TtsController.ACTION_PAUSE -> pause()
@@ -303,6 +324,14 @@ class TtsService : Service() {
         sentenceIndex = 0
         eventEmitter.emit(EVENT_TTS_DONE)
         updateNotification(false)
+    }
+
+    private fun replay() {
+        if (isSpeaking) {
+            pause()
+        } else {
+            resumePlayback()
+        }
     }
 
     private fun pause() {
@@ -400,11 +429,15 @@ class TtsService : Service() {
 
     private fun buildNotification(playing: Boolean): Notification {
         val prevIntent =
-            Intent(this, TtsService::class.java).apply { action = TtsController.ACTION_PREV_CHAPTER }
+            Intent(this, TtsService::class.java).apply {
+                action = TtsController.ACTION_PREV_CHAPTER
+            }
         val toggleIntent =
             Intent(this, TtsService::class.java).apply { action = TtsController.ACTION_TOGGLE }
         val nextIntent =
-            Intent(this, TtsService::class.java).apply { action = TtsController.ACTION_NEXT_CHAPTER }
+            Intent(this, TtsService::class.java).apply {
+                action = TtsController.ACTION_NEXT_CHAPTER
+            }
         val openIntent = Intent(this, MainActivity::class.java).apply {
             action = MainActivity.ACTION_OPEN_READER
             filePath?.let { putExtra(MainActivity.EXTRA_FILE_PATH, it) }
@@ -463,23 +496,26 @@ class TtsService : Service() {
     }
 
     private fun updatePlaybackState(playing: Boolean) {
-        val state = if (playing) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
+        val state =
+            if (playing) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
         mediaSession.setPlaybackState(
             PlaybackStateCompat.Builder()
                 .setActions(
                     PlaybackStateCompat.ACTION_PLAY or
-                        PlaybackStateCompat.ACTION_PAUSE or
-                        PlaybackStateCompat.ACTION_PLAY_PAUSE or
-                        PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
-                        PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
-                        PlaybackStateCompat.ACTION_STOP
+                            PlaybackStateCompat.ACTION_PAUSE or
+                            PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                            PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                            PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                            PlaybackStateCompat.ACTION_STOP
                 )
                 .setState(state, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 1f)
                 .build()
         )
         mediaSession.setMetadata(
             MediaMetadataCompat.Builder()
-                .putString(MediaMetadataCompat.METADATA_KEY_TITLE, bookTitle.ifBlank { getString(R.string.app_name) })
+                .putString(
+                    MediaMetadataCompat.METADATA_KEY_TITLE,
+                    bookTitle.ifBlank { getString(R.string.app_name) })
                 .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, chapterProgressText())
                 .build()
         )
