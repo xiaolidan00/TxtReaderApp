@@ -354,9 +354,9 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                         textColorCustom = settings.textColorCustom,
                         bgColorCustom = settings.bgColorCustom,
                         textColor = if (settings.textColorCustom) settings.textColorArgb
-                            else if (isSystemDark()) DARK_TEXT_COLOR else LIGHT_TEXT_COLOR,
+                        else if (isSystemDark()) DARK_TEXT_COLOR else LIGHT_TEXT_COLOR,
                         bgColor = if (settings.bgColorCustom) settings.bgColorArgb
-                            else if (isSystemDark()) DARK_BG_COLOR else LIGHT_BG_COLOR,
+                        else if (isSystemDark()) DARK_BG_COLOR else LIGHT_BG_COLOR,
                         regexType = regexType,
                         regexStr = regexStr,
                         encodeStr = stateEncode,
@@ -592,8 +592,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     // 系统是否处于夜间模式
     private fun isSystemDark(): Boolean =
         (getApplication<Application>().resources.configuration.uiMode and
-            android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
-            android.content.res.Configuration.UI_MODE_NIGHT_YES
+                android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                android.content.res.Configuration.UI_MODE_NIGHT_YES
 
     // 系统亮/暗切换时刷新正文默认配色（仅未手动选色时生效）
     fun applySystemReadingColors(dark: Boolean) {
@@ -607,16 +607,20 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setRegex(type: Int) {
         if (type !in RegexPresets.list.indices) return
+
         if (type == RegexPresets.CUSTOM_INDEX) {
             _state.update { it.copy(regexType = type) }
             return
         }
         val c = content ?: return
         val preset = RegexPresets.list[type]
-        if (preset.value == c.regexStr) {
+        if (preset.value == "") {
+            _state.update { it.copy(regexType = type) }
+        } else {
             _state.update { it.copy(regexType = type, regexStr = preset.value) }
-            return
         }
+
+
         viewModelScope.launch(Dispatchers.IO) {
             val chapters = ChapterParser.parse(c.text, preset.value)
             val updated = BookContent(
@@ -962,6 +966,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         // 亮色系统下的正文默认配色（米白底 + 深灰字）
         const val LIGHT_TEXT_COLOR = 0xFF333333L
         const val LIGHT_BG_COLOR = 0xFFFFF9F0L
+
         // 暗色系统下的正文默认配色（近黑底 + 浅灰字）
         const val DARK_TEXT_COLOR = 0xFFCCCCCCL
         const val DARK_BG_COLOR = 0xFF1A1A1AL
